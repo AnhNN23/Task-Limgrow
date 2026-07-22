@@ -63,6 +63,9 @@ create table if not exists public.time_entries (
   ended_at timestamptz,
   duration_seconds integer not null default 0 check (duration_seconds >= 0),
   note text,
+  correction_reason text check (correction_reason is null or char_length(btrim(correction_reason)) between 5 and 500),
+  corrected_at timestamptz,
+  corrected_by uuid references public.profiles(id) on delete set null,
   created_at timestamptz not null default now(),
   check (ended_at is null or ended_at >= started_at)
 );
@@ -73,6 +76,28 @@ create index if not exists tasks_project_id_idx on public.tasks(project_id);
 create index if not exists tasks_assignee_id_idx on public.tasks(assignee_id);
 create index if not exists time_entries_task_id_idx on public.time_entries(task_id);
 create index if not exists time_entries_user_started_idx on public.time_entries(user_id, started_at desc);
+
+create table if not exists public.time_entry_adjustments (
+  id uuid primary key default gen_random_uuid(),
+  time_entry_id uuid not null references public.time_entries(id) on delete cascade,
+  task_id uuid not null references public.tasks(id) on delete cascade,
+  entry_user_id uuid references public.profiles(id) on delete set null,
+  adjusted_by uuid references public.profiles(id) on delete set null,
+  reason text not null check (char_length(btrim(reason)) between 5 and 500),
+  old_started_at timestamptz not null,
+  new_started_at timestamptz not null,
+  old_ended_at timestamptz,
+  new_ended_at timestamptz,
+  old_duration_seconds integer not null,
+  new_duration_seconds integer not null,
+  created_at timestamptz not null default now()
+);
+alter table public.time_entry_adjustments enable row level security;
+create index if not exists time_entry_adjustments_entry_created_idx on public.time_entry_adjustments(time_entry_id, created_at desc);
+create index if not exists time_entry_adjustments_user_created_idx on public.time_entry_adjustments(entry_user_id, created_at desc);
+create index if not exists time_entries_corrected_by_idx on public.time_entries(corrected_by) where corrected_by is not null;
+create index if not exists time_entry_adjustments_task_idx on public.time_entry_adjustments(task_id);
+create index if not exists time_entry_adjustments_adjusted_by_idx on public.time_entry_adjustments(adjusted_by) where adjusted_by is not null;
 
 create or replace function public.is_project_manager()
 returns boolean language sql stable security definer set search_path = public

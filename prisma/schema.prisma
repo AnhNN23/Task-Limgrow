@@ -119,16 +119,19 @@ model Task {
 }
 
 model TimeEntry {
-  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  task_id          String    @db.Uuid
-  user_id          String    @db.Uuid
-  started_at       DateTime  @default(now()) @db.Timestamptz(6)
-  ended_at         DateTime? @db.Timestamptz(6)
-  duration_seconds Int       @default(0)
-  note             String?
-  created_at       DateTime  @default(now()) @db.Timestamptz(6)
-  task             Task      @relation(fields: [task_id], references: [id], onDelete: Cascade)
-  user             Profile   @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  task_id           String    @db.Uuid
+  user_id           String    @db.Uuid
+  started_at        DateTime  @default(now()) @db.Timestamptz(6)
+  ended_at          DateTime? @db.Timestamptz(6)
+  duration_seconds  Int       @default(0)
+  note              String?
+  correction_reason String?
+  corrected_at      DateTime? @db.Timestamptz(6)
+  corrected_by      String?   @db.Uuid
+  created_at        DateTime  @default(now()) @db.Timestamptz(6)
+  task              Task      @relation(fields: [task_id], references: [id], onDelete: Cascade)
+  user              Profile   @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@index([task_id], map: "time_entries_task_id_idx")
   @@index([user_id, started_at(sort: Desc)], map: "time_entries_user_started_idx")

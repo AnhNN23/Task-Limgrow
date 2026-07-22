@@ -11,6 +11,7 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import {
   BarChart3,
+  AlertTriangle,
   Bell,
   BookOpen,
   BriefcaseBusiness,
@@ -622,6 +623,7 @@ export function Dashboard({ initialData }: { initialData: DashboardData }) {
               onToggleTimer={toggleTimer}
               onStatus={updateTaskStatus}
               onViewTasks={() => setView("tasks")}
+              onViewTracking={() => setView("tracking")}
             />
           )}
           {view === "tasks" && (
@@ -745,6 +747,7 @@ function Overview({
   onToggleTimer,
   onStatus,
   onViewTasks,
+  onViewTracking,
 }: {
   data: DashboardData;
   tasks: Task[];
@@ -755,12 +758,21 @@ function Overview({
   onToggleTimer: (task: Task) => void;
   onStatus: (task: Task, status: TaskStatus) => void;
   onViewTasks: () => void;
+  onViewTracking: () => void;
 }) {
   const { tr, dateLocale } = useI18n();
   const activeTask = data.tasks.find(
     (task) => task.id === activeEntry?.task_id,
   );
   const done = data.tasks.filter((task) => task.status === "done").length;
+  const activeElapsed = activeEntry
+    ? Math.max(
+        0,
+        Math.floor((now - new Date(activeEntry.started_at).getTime()) / 1000),
+      )
+    : 0;
+  const timerNeedsReview = activeElapsed >= 4 * 60 * 60;
+  const timerMayBeForgotten = activeElapsed >= 8 * 60 * 60;
   return (
     <>
       <div className="mb-7 flex items-end justify-between">
@@ -819,23 +831,55 @@ function Overview({
         />
       </div>
       {activeEntry && activeTask && (
-        <Card className="mt-6 flex flex-col gap-4 border-[#a9d7c7] bg-[#f0faf6] p-5 md:flex-row md:items-center">
+        <Card
+          className={cn(
+            "mt-6 flex flex-col gap-4 p-5 md:flex-row md:items-center",
+            timerMayBeForgotten
+              ? "border-[#f0b8b1] bg-[#fff1f0]"
+              : timerNeedsReview
+                ? "border-[#f1d58a] bg-[#fff7d6]"
+                : "border-[#a9d7c7] bg-[#f0faf6]",
+          )}
+        >
           <div className="flex flex-1 items-center gap-4">
-            <span className="timer-dot h-3 w-3 rounded-full bg-[#11a071]" />
+            {timerNeedsReview ? (
+              <AlertTriangle
+                className={cn(
+                  "size-5 shrink-0",
+                  timerMayBeForgotten ? "text-[#ae2a19]" : "text-[#7f5f01]",
+                )}
+              />
+            ) : (
+              <span className="timer-dot h-3 w-3 rounded-full bg-[#11a071]" />
+            )}
             <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-[#16805f]">
-                {tr("Đang bấm giờ", "Timer running")}
+              <p
+                className={cn(
+                  "text-xs font-bold uppercase tracking-wider",
+                  timerMayBeForgotten
+                    ? "text-[#ae2a19]"
+                    : timerNeedsReview
+                      ? "text-[#7f5f01]"
+                      : "text-[#16805f]",
+                )}
+              >
+                {timerMayBeForgotten
+                  ? tr("Có thể quên dừng timer", "Timer may be forgotten")
+                  : timerNeedsReview
+                    ? tr("Timer đang chạy lâu", "Long-running timer")
+                    : tr("Đang bấm giờ", "Timer running")}
               </p>
               <p className="mt-1 font-semibold">{activeTask.title}</p>
             </div>
           </div>
           <div className="font-mono text-2xl font-semibold">
-            {formatDuration(
-              Math.floor(
-                (now - new Date(activeEntry.started_at).getTime()) / 1000,
-              ),
-            )}
+            {formatDuration(activeElapsed)}
           </div>
+          {timerNeedsReview && (
+            <Button variant="outline" onClick={onViewTracking}>
+              <Pencil /> {tr("Kiểm tra & chỉnh giờ", "Review & adjust")}
+            </Button>
+          )}
           <Button variant="danger" onClick={() => onToggleTimer(activeTask)}>
             <CircleStop size={17} /> {tr("Dừng", "Stop")}
           </Button>

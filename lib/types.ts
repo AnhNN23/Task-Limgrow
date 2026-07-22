@@ -47,6 +47,9 @@ export interface TimeEntry {
   ended_at: string | null;
   duration_seconds: number;
   note: string | null;
+  correction_reason: string | null;
+  corrected_at: string | null;
+  corrected_by: string | null;
 }
 
 export interface Sprint {

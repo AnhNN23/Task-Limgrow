@@ -1,14 +1,22 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type FormEvent,
+} from "react";
 import {
   Activity,
+  AlertTriangle,
   CheckCircle2,
   CircleStop,
   Clock3,
   History,
   ListChecks,
   Play,
+  Pencil,
   RefreshCw,
   Timer,
   TrendingUp,
@@ -18,7 +26,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Input } from "@/components/ui/input";
 import { SelectField } from "@/components/ui/select";
+import { useToast } from "@/components/ui/toast";
 import { useI18n } from "@/lib/i18n";
 import { cn, formatDuration, initials } from "@/lib/utils";
 import type { DashboardData, Task, TimeEntry } from "@/lib/types";
@@ -36,6 +46,21 @@ type PendingAction =
   | { type: "stop"; entry: TimeEntry }
   | { type: "switch"; entry: TimeEntry; taskId: string }
   | null;
+
+const LONG_TIMER_SECONDS = 4 * 60 * 60;
+const FORGOTTEN_TIMER_SECONDS = 8 * 60 * 60;
+
+function toDateTimeLocal(value: string | Date) {
+  const date = value instanceof Date ? value : new Date(value);
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 16);
+}
+
+function timerRisk(seconds: number) {
+  if (seconds >= FORGOTTEN_TIMER_SECONDS) return "forgotten" as const;
+  if (seconds >= LONG_TIMER_SECONDS) return "long" as const;
+  return "normal" as const;
+}
 
 function entrySeconds(entry: TimeEntry, now: number) {
   return (
@@ -114,6 +139,7 @@ export function ActivityTracking({
   onError,
 }: Props) {
   const { tr, dateLocale } = useI18n();
+  const { toast } = useToast();
   const ownRunningEntry = data.timeEntries.find(
     (entry) => !entry.ended_at && entry.user_id === data.profile.id,
   );
@@ -125,6 +151,7 @@ export function ActivityTracking({
   const [busy, setBusy] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
+  const [editingEntry, setEditingEntry] = useState<TimeEntry | null>(null);
 
   const ownTasks = data.tasks.filter(
     (task) =>
@@ -255,6 +282,100 @@ export function ActivityTracking({
     await startEntry(selectedTaskId);
   }
 
+  async function saveCorrection(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editingEntry) return;
+    if (!isManager && editingEntry.user_id !== data.profile.id) {
+      onError(
+        tr("Bạn không thể sửa worklog này.", "You cannot edit this worklog."),
+      );
+      return;
+    }
+    const values = new FormData(event.currentTarget);
+    const startedAt = new Date(String(values.get("started_at")));
+    const endedAt = new Date(String(values.get("ended_at")));
+    const reason = String(values.get("correction_reason") || "").trim();
+    const note = String(values.get("note") || "").trim() || null;
+    if (
+      Number.isNaN(startedAt.getTime()) ||
+      Number.isNaN(endedAt.getTime()) ||
+      endedAt <= startedAt
+    ) {
+      onError(
+        tr(
+          "Giờ kết thúc phải sau giờ bắt đầu.",
+          "End time must be after start time.",
+        ),
+      );
+      return;
+    }
+    if (endedAt.getTime() > Date.now() + 60000) {
+      onError(
+        tr(
+          "Giờ kết thúc không được nằm trong tương lai.",
+          "End time cannot be in the future.",
+        ),
+      );
+      return;
+    }
+    if (endedAt.getTime() - startedAt.getTime() > 24 * 60 * 60 * 1000) {
+      onError(
+        tr(
+          "Một phiên làm việc không được vượt quá 24 giờ.",
+          "A work session cannot exceed 24 hours.",
+        ),
+      );
+      return;
+    }
+    if (reason.length < 5) {
+      onError(
+        tr(
+          "Vui lòng nhập lý do chỉnh sửa ít nhất 5 ký tự.",
+          "Enter a correction reason of at least 5 characters.",
+        ),
+      );
+      return;
+    }
+
+    setBusy(true);
+    const duration = Math.max(
+      1,
+      Math.floor((endedAt.getTime() - startedAt.getTime()) / 1000),
+    );
+    let query = createClient()
+      .from("time_entries")
+      .update({
+        started_at: startedAt.toISOString(),
+        ended_at: endedAt.toISOString(),
+        duration_seconds: duration,
+        note,
+        correction_reason: reason,
+      })
+      .eq("id", editingEntry.id);
+    if (!isManager) query = query.eq("user_id", data.profile.id);
+    const { data: updated, error } = await query.select().single();
+    setBusy(false);
+    if (error) {
+      onError(error.message);
+      return;
+    }
+    onDataChange((current) => ({
+      ...current,
+      timeEntries: current.timeEntries.map((entry) =>
+        entry.id === editingEntry.id ? (updated as TimeEntry) : entry,
+      ),
+    }));
+    toast({
+      title: tr("Đã điều chỉnh worklog", "Worklog adjusted"),
+      description: tr(
+        "Giá trị cũ và mới đã được lưu trong lịch sử kiểm toán.",
+        "The old and new values were saved to the audit history.",
+      ),
+      variant: "success",
+    });
+    setEditingEntry(null);
+  }
+
   async function confirmPendingAction() {
     if (!pendingAction) return;
     const action = pendingAction;
@@ -302,6 +423,7 @@ export function ActivityTracking({
   const activeTimers = visibleEntries.filter((entry) => !entry.ended_at);
   const selectedTask = data.tasks.find((task) => task.id === selectedTaskId);
   const ownElapsed = ownRunningEntry ? entrySeconds(ownRunningEntry, now) : 0;
+  const ownTimerRisk = timerRisk(ownElapsed);
 
   return (
     <section className="space-y-5">
@@ -398,6 +520,38 @@ export function ActivityTracking({
                         minute: "2-digit",
                       }).format(new Date(ownRunningEntry.started_at))}
                     </p>
+                    {ownTimerRisk !== "normal" && (
+                      <div
+                        className={cn(
+                          "mt-3 flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-xs",
+                          ownTimerRisk === "forgotten"
+                            ? "border-[#f0b8b1] bg-[#fff1f0] text-[#ae2a19]"
+                            : "border-[#f1d58a] bg-[#fff7d6] text-[#7f5f01]",
+                        )}
+                      >
+                        <AlertTriangle className="size-4 shrink-0" />
+                        <span className="flex-1 font-semibold">
+                          {ownTimerRisk === "forgotten"
+                            ? tr(
+                                "Timer đã chạy hơn 8 giờ — có thể bạn quên dừng.",
+                                "This timer has run for over 8 hours — you may have forgotten to stop it.",
+                              )
+                            : tr(
+                                "Timer đã chạy hơn 4 giờ. Hãy kiểm tra lại.",
+                                "This timer has run for over 4 hours. Please check it.",
+                              )}
+                        </span>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="bg-white"
+                          onClick={() => setEditingEntry(ownRunningEntry)}
+                        >
+                          <Pencil /> {tr("Dừng & chỉnh giờ", "Stop & correct")}
+                        </Button>
+                      </div>
+                    )}
                   </div>
                   <p className="font-mono text-3xl font-bold tabular-nums text-[#17694c]">
                     {formatDuration(ownElapsed)}
@@ -496,10 +650,20 @@ export function ActivityTracking({
                 (item) => item.id === entry.user_id,
               );
               const task = data.tasks.find((item) => item.id === entry.task_id);
+              const elapsed = entrySeconds(entry, now);
+              const risk = timerRisk(elapsed);
+              const canEdit = isManager || entry.user_id === data.profile.id;
               return (
                 <div
                   key={entry.id}
-                  className="flex items-center gap-3 rounded-lg border border-[#e2e7e4] p-3"
+                  className={cn(
+                    "flex items-center gap-3 rounded-lg border p-3",
+                    risk === "forgotten"
+                      ? "border-[#f0b8b1] bg-[#fff8f7]"
+                      : risk === "long"
+                        ? "border-[#f1d58a] bg-[#fffdf5]"
+                        : "border-[#e2e7e4]",
+                  )}
                 >
                   <span className="grid h-8 w-8 place-items-center rounded-full bg-[#eeecff] text-[10px] font-bold text-[#3e318c]">
                     {member ? initials(member.full_name) : "?"}
@@ -513,8 +677,30 @@ export function ActivityTracking({
                     </p>
                   </div>
                   <span className="font-mono text-xs font-bold text-[#216e4e]">
-                    {formatDuration(entrySeconds(entry, now))}
+                    {formatDuration(elapsed)}
                   </span>
+                  {risk !== "normal" && (
+                    <Badge
+                      variant={risk === "forgotten" ? "danger" : "warning"}
+                    >
+                      <AlertTriangle />
+                      {risk === "forgotten"
+                        ? tr("Quên dừng?", "Forgotten?")
+                        : tr("Đang lâu", "Long running")}
+                    </Badge>
+                  )}
+                  {canEdit && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="size-8"
+                      onClick={() => setEditingEntry(entry)}
+                      aria-label={tr("Điều chỉnh giờ", "Adjust time")}
+                    >
+                      <Pencil />
+                    </Button>
+                  )}
                 </div>
               );
             })}
@@ -679,7 +865,7 @@ export function ActivityTracking({
             return (
               <div
                 key={entry.id}
-                className="grid gap-3 px-5 py-3 sm:grid-cols-[minmax(0,1fr)_160px_110px] sm:items-center"
+                className="grid gap-3 px-5 py-3 sm:grid-cols-[minmax(0,1fr)_160px_130px_90px] sm:items-center"
               >
                 <div className="flex min-w-0 items-center gap-3">
                   <span
@@ -703,6 +889,15 @@ export function ActivityTracking({
                     <p className="mt-0.5 truncate text-[10px] text-[#89938e]">
                       {member?.full_name}
                     </p>
+                    {entry.corrected_at && (
+                      <p
+                        className="mt-1 truncate text-[10px] font-medium text-[#7f5f01]"
+                        title={entry.correction_reason ?? undefined}
+                      >
+                        {tr("Đã điều chỉnh", "Adjusted")}:{" "}
+                        {entry.correction_reason}
+                      </p>
+                    )}
                   </div>
                 </div>
                 <p className="text-xs text-[#59645f]">
@@ -722,6 +917,18 @@ export function ActivityTracking({
                       ? tr("Đã lưu", "Saved")
                       : tr("Đang chạy", "Running")}
                   </p>
+                </div>
+                <div className="sm:text-right">
+                  {(isManager || entry.user_id === data.profile.id) && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setEditingEntry(entry)}
+                    >
+                      <Pencil /> {tr("Sửa", "Edit")}
+                    </Button>
+                  )}
                 </div>
               </div>
             );
@@ -743,6 +950,20 @@ export function ActivityTracking({
         </div>
       </Card>
 
+      {editingEntry && (
+        <TimeCorrectionDialog
+          key={editingEntry.id}
+          entry={editingEntry}
+          task={data.tasks.find((task) => task.id === editingEntry.task_id)}
+          member={data.members.find(
+            (member) => member.id === editingEntry.user_id,
+          )}
+          busy={busy}
+          isManager={isManager}
+          onSubmit={saveCorrection}
+          onClose={() => !busy && setEditingEntry(null)}
+        />
+      )}
       <ConfirmDialog
         open={Boolean(pendingAction)}
         title={
@@ -771,6 +992,194 @@ export function ActivityTracking({
         onConfirm={() => void confirmPendingAction()}
       />
     </section>
+  );
+}
+
+function TimeCorrectionDialog({
+  entry,
+  task,
+  member,
+  busy,
+  isManager,
+  onSubmit,
+  onClose,
+}: {
+  entry: TimeEntry;
+  task?: Task;
+  member?: DashboardData["members"][number];
+  busy: boolean;
+  isManager: boolean;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onClose: () => void;
+}) {
+  const { tr } = useI18n();
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const [startedAt, setStartedAt] = useState(toDateTimeLocal(entry.started_at));
+  const [endedAt, setEndedAt] = useState(
+    toDateTimeLocal(entry.ended_at ?? new Date()),
+  );
+  const startMs = new Date(startedAt).getTime();
+  const endMs = new Date(endedAt).getTime();
+  const previewSeconds =
+    Number.isFinite(startMs) && Number.isFinite(endMs) && endMs > startMs
+      ? Math.floor((endMs - startMs) / 1000)
+      : 0;
+  const wasRunning = !entry.ended_at;
+
+  return (
+    <div
+      className="fixed inset-0 z-[120] grid place-items-center bg-[#08042f]/45 p-4 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="time-correction-title"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget && !busy) onClose();
+      }}
+    >
+      <Card className="max-h-[92vh] w-full max-w-xl overflow-y-auto p-6">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <Badge variant={wasRunning ? "warning" : "info"}>
+              {wasRunning
+                ? tr("Timer đang chạy", "Running timer")
+                : tr("Worklog đã lưu", "Saved worklog")}
+            </Badge>
+            <h2
+              id="time-correction-title"
+              className="mt-3 text-lg font-semibold text-[#172b4d]"
+            >
+              {wasRunning
+                ? tr("Dừng và điều chỉnh thời gian", "Stop and correct time")
+                : tr("Điều chỉnh worklog", "Adjust worklog")}
+            </h2>
+            <p className="mt-1 text-sm text-[#5e6c84]">
+              {task?.title ?? tr("Task đã xóa", "Deleted task")}
+              {isManager && member ? ` · ${member.full_name}` : ""}
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={onClose}
+            disabled={busy}
+            aria-label={tr("Đóng", "Close")}
+          >
+            ×
+          </Button>
+        </div>
+
+        {wasRunning && (
+          <div className="mt-5 flex gap-3 rounded-lg border border-[#f1d58a] bg-[#fff7d6] p-3 text-xs leading-5 text-[#7f5f01]">
+            <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+            <p>
+              {tr(
+                "Hãy chọn thời điểm bạn thực sự ngừng làm việc. Worklog sẽ được đóng tại thời điểm đó, không phải thời điểm hiện tại.",
+                "Choose when you actually stopped working. The worklog will close at that time, not the current time.",
+              )}
+            </p>
+          </div>
+        )}
+
+        <form onSubmit={onSubmit} className="mt-5 space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="text-sm font-semibold text-[#172b4d]">
+              {tr("Bắt đầu", "Started")}
+              <Input
+                type="datetime-local"
+                name="started_at"
+                required
+                value={startedAt}
+                onChange={(event) => setStartedAt(event.target.value)}
+                className="mt-2"
+              />
+            </label>
+            <label className="text-sm font-semibold text-[#172b4d]">
+              {tr("Kết thúc thực tế", "Actual end")}
+              <Input
+                type="datetime-local"
+                name="ended_at"
+                required
+                max={toDateTimeLocal(new Date())}
+                value={endedAt}
+                onChange={(event) => setEndedAt(event.target.value)}
+                className="mt-2"
+              />
+            </label>
+          </div>
+
+          <div className="flex items-center justify-between rounded-lg border border-[#dfe1e6] bg-[#f7f8f9] px-4 py-3">
+            <span className="text-xs font-semibold text-[#5e6c84]">
+              {tr("Thời lượng sau điều chỉnh", "Corrected duration")}
+            </span>
+            <span className="font-mono text-base font-bold text-[#37298e]">
+              {previewSeconds ? formatDuration(previewSeconds) : "—"}
+            </span>
+          </div>
+
+          <label className="block text-sm font-semibold text-[#172b4d]">
+            {tr("Lý do điều chỉnh", "Correction reason")}
+            <textarea
+              name="correction_reason"
+              required
+              minLength={5}
+              maxLength={500}
+              rows={3}
+              defaultValue={
+                wasRunning
+                  ? tr("Quên bấm dừng timer", "Forgot to stop the timer")
+                  : ""
+              }
+              placeholder={tr(
+                "Ví dụ: Quên bấm dừng khi kết thúc công việc",
+                "Example: Forgot to stop when work finished",
+              )}
+              className="mt-2 w-full resize-none rounded-md border border-[#dfe1e6] bg-white px-3 py-2 text-sm font-normal outline-none transition focus:border-[#4c43b5] focus:ring-2 focus:ring-[#4c43b5]/15"
+            />
+          </label>
+
+          <label className="block text-sm font-semibold text-[#172b4d]">
+            {tr("Ghi chú công việc", "Work note")}
+            <textarea
+              name="note"
+              maxLength={1000}
+              rows={2}
+              defaultValue={entry.note ?? ""}
+              placeholder={tr(
+                "Nội dung đã thực hiện trong phiên này (không bắt buộc)",
+                "What was completed in this session (optional)",
+              )}
+              className="mt-2 w-full resize-none rounded-md border border-[#dfe1e6] bg-white px-3 py-2 text-sm font-normal outline-none transition focus:border-[#4c43b5] focus:ring-2 focus:ring-[#4c43b5]/15"
+            />
+          </label>
+
+          <div className="rounded-lg bg-[#f0edff] px-4 py-3 text-xs leading-5 text-[#5747b6]">
+            {tr(
+              `Bản ghi cũ, bản ghi mới, lý do và người chỉnh sửa sẽ được lưu lại. Múi giờ hiển thị: ${timeZone}.`,
+              `Old and new values, the reason, and the editor are retained. Display timezone: ${timeZone}.`,
+            )}
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onClose}
+              disabled={busy}
+            >
+              {tr("Hủy", "Cancel")}
+            </Button>
+            <Button type="submit" disabled={busy || !previewSeconds}>
+              {busy
+                ? tr("Đang lưu…", "Saving…")
+                : wasRunning
+                  ? tr("Dừng & lưu điều chỉnh", "Stop & save correction")
+                  : tr("Lưu điều chỉnh", "Save correction")}
+            </Button>
+          </div>
+        </form>
+      </Card>
+    </div>
   );
 }
 

@@ -1191,6 +1191,9 @@ function TaskDrawer({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [newLabelMode, setNewLabelMode] = useState(false);
+  const [editingLabel, setEditingLabel] = useState<Label | null>(null);
+  const [deletingLabel, setDeletingLabel] = useState<Label | null>(null);
+  const [labelBusy, setLabelBusy] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<{
     kind: "checklist" | "comment" | "attachment";
     id: string;
@@ -1200,6 +1203,14 @@ function TaskDrawer({
   const { toast } = useToast();
   const { tr } = useI18n();
   const project = data.projects.find((item) => item.id === task.project_id);
+  const projectLabels = data.labels.filter(
+    (label) => label.project_id === task.project_id,
+  );
+  const assignedLabelIds = new Set(
+    data.taskLabels
+      .filter((relation) => relation.task_id === task.id)
+      .map((relation) => relation.label_id),
+  );
   const checklist = data.checklistItems.filter(
     (item) => item.task_id === task.id,
   );
@@ -1372,7 +1383,7 @@ function TaskDrawer({
       onClose();
     }
   }
-  async function addLabel(labelId: string) {
+  async function addLabel(labelId: string, notify = true) {
     if (
       !labelId ||
       data.taskLabels.some(
@@ -1386,11 +1397,18 @@ function TaskDrawer({
       .select()
       .single();
     if (error) onError(error.message);
-    else
+    else {
       onDataChange((current) => ({
         ...current,
         taskLabels: [...current.taskLabels, relation],
       }));
+      if (notify)
+        toast({
+          title: tr("Đã gắn nhãn", "Label added"),
+          variant: "success",
+          duration: 2200,
+        });
+    }
   }
   async function createLabel(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1398,6 +1416,7 @@ function TaskDrawer({
     const values = new FormData(form);
     const name = String(values.get("label_name") || "").trim();
     if (!name) return;
+    setLabelBusy(true);
     const { data: label, error } = await createClient()
       .from("labels")
       .insert({
@@ -1407,6 +1426,7 @@ function TaskDrawer({
       })
       .select()
       .single();
+    setLabelBusy(false);
     if (error) onError(error.message);
     else {
       const typed = label as Label;
@@ -1414,9 +1434,71 @@ function TaskDrawer({
         ...current,
         labels: [...current.labels, typed],
       }));
-      await addLabel(typed.id);
-      setNewLabelMode(false);
-      toast({ title: "Đã tạo nhãn", description: name, variant: "success" });
+      await addLabel(typed.id, false);
+      form.reset();
+      toast({
+        title: tr("Đã tạo nhãn", "Label created"),
+        description: name,
+        variant: "success",
+      });
+    }
+  }
+  async function updateLabel(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editingLabel) return;
+    const values = new FormData(event.currentTarget);
+    const patch = {
+      name: String(values.get("label_name") || "").trim(),
+      color: String(values.get("label_color") || editingLabel.color),
+    };
+    if (!patch.name) return;
+    setLabelBusy(true);
+    const { data: updated, error } = await createClient()
+      .from("labels")
+      .update(patch)
+      .eq("id", editingLabel.id)
+      .select()
+      .single();
+    setLabelBusy(false);
+    if (error) onError(error.message);
+    else {
+      onDataChange((current) => ({
+        ...current,
+        labels: current.labels.map((label) =>
+          label.id === editingLabel.id ? (updated as Label) : label,
+        ),
+      }));
+      toast({
+        title: tr("Đã cập nhật nhãn", "Label updated"),
+        description: patch.name,
+        variant: "success",
+      });
+      setEditingLabel(null);
+    }
+  }
+  async function deleteLabel() {
+    if (!deletingLabel) return;
+    setLabelBusy(true);
+    const { error } = await createClient()
+      .from("labels")
+      .delete()
+      .eq("id", deletingLabel.id);
+    setLabelBusy(false);
+    if (error) onError(error.message);
+    else {
+      onDataChange((current) => ({
+        ...current,
+        labels: current.labels.filter((label) => label.id !== deletingLabel.id),
+        taskLabels: current.taskLabels.filter(
+          (relation) => relation.label_id !== deletingLabel.id,
+        ),
+      }));
+      toast({
+        title: tr("Đã xóa nhãn", "Label deleted"),
+        description: deletingLabel.name,
+        variant: "success",
+      });
+      setDeletingLabel(null);
     }
   }
   async function removeTaskLabel(labelId: string) {
@@ -1426,13 +1508,19 @@ function TaskDrawer({
       .eq("task_id", task.id)
       .eq("label_id", labelId);
     if (error) onError(error.message);
-    else
+    else {
       onDataChange((current) => ({
         ...current,
         taskLabels: current.taskLabels.filter(
           (item) => !(item.task_id === task.id && item.label_id === labelId),
         ),
       }));
+      toast({
+        title: tr("Đã bỏ nhãn khỏi task", "Label removed from task"),
+        variant: "success",
+        duration: 2200,
+      });
+    }
   }
   async function deleteRelatedItem() {
     if (!pendingDelete) return;
@@ -1907,27 +1995,44 @@ function TaskDrawer({
               </span>
             </Property>
             <Property icon={Tag} label={tr("Nhãn", "Labels")}>
-              <div className="flex flex-wrap gap-1">
+              <div className="flex flex-wrap gap-1.5">
                 {taskLabels(task.id, data).map((label) => (
-                  <span
+                  <Badge
                     key={label.id}
-                    className="inline-flex items-center gap-1 rounded px-2 py-1 text-[10px] font-semibold"
+                    variant="outline"
+                    className="group gap-1.5"
                     style={{
                       color: label.color,
-                      background: `${label.color}15`,
+                      borderColor: `${label.color}45`,
+                      backgroundColor: `${label.color}12`,
                     }}
                   >
+                    <span
+                      className="size-2 rounded-full"
+                      style={{ backgroundColor: label.color }}
+                    />
                     {label.name}
                     {isManager && (
-                      <button
-                        type="button"
-                        onClick={() => removeTaskLabel(label.id)}
-                        aria-label={tr("Bỏ nhãn", "Remove label")}
-                      >
-                        <X size={10} />
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setEditingLabel(label)}
+                          className="ml-0.5 rounded-sm opacity-55 hover:opacity-100"
+                          aria-label={tr("Sửa nhãn", "Edit label")}
+                        >
+                          <Pencil />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => removeTaskLabel(label.id)}
+                          className="rounded-sm opacity-55 hover:opacity-100"
+                          aria-label={tr("Bỏ nhãn", "Remove label")}
+                        >
+                          <X />
+                        </button>
+                      </>
                     )}
-                  </span>
+                  </Badge>
                 ))}
                 {!taskLabels(task.id, data).length && (
                   <span className="text-xs text-[#969e9a]">
@@ -1936,7 +2041,7 @@ function TaskDrawer({
                 )}
               </div>
               {isManager && (
-                <div className="mt-2 flex gap-1">
+                <div className="mt-2 flex gap-2">
                   <SelectField
                     key={
                       data.taskLabels.filter((item) => item.task_id === task.id)
@@ -1944,43 +2049,98 @@ function TaskDrawer({
                     }
                     placeholder={tr("+ Gắn nhãn", "+ Add label")}
                     onValueChange={addLabel}
-                    className="h-8 min-w-0 flex-1 text-[11px] shadow-none"
-                    options={data.labels
-                      .filter((label) => label.project_id === task.project_id)
-                      .map((label) => ({ value: label.id, label: label.name }))}
+                    className="h-8 min-w-0 flex-1 text-xs shadow-none"
+                    options={projectLabels
+                      .filter((label) => !assignedLabelIds.has(label.id))
+                      .map((label) => ({
+                        value: label.id,
+                        label: (
+                          <span className="flex items-center gap-2">
+                            <span
+                              className="size-2 rounded-full"
+                              style={{ backgroundColor: label.color }}
+                            />
+                            {label.name}
+                          </span>
+                        ),
+                      }))}
                   />
-                  <button
+                  <Button
                     type="button"
+                    variant="outline"
+                    size="sm"
                     onClick={() => setNewLabelMode(!newLabelMode)}
-                    className="rounded-md border border-[#dce2df] bg-white px-2 text-xs"
                   >
-                    {tr("Mới", "New")}
-                  </button>
+                    <Tag /> {tr("Quản lý", "Manage")}
+                  </Button>
                 </div>
               )}
               {isManager && newLabelMode && (
-                <form onSubmit={createLabel} className="mt-2 flex gap-1">
-                  <input
-                    name="label_color"
-                    type="color"
-                    defaultValue="#6957c8"
-                    className="h-8 w-9 rounded border p-0.5"
-                    aria-label={tr("Màu nhãn", "Label color")}
-                  />
-                  <input
-                    name="label_name"
-                    required
-                    autoFocus
-                    placeholder={tr("Tên nhãn", "Label name")}
-                    className="min-w-0 flex-1 rounded-md border border-[#dce2df] bg-white px-2 text-[11px]"
-                  />
-                  <button
-                    type="submit"
-                    className="rounded-md bg-[#130b5c] px-2 text-[11px] font-semibold text-white"
+                <div className="mt-3 overflow-hidden rounded-lg border border-[#dfe1e6] bg-[#f7f8f9]">
+                  <form
+                    onSubmit={createLabel}
+                    className="flex gap-2 border-b border-[#dfe1e6] p-3"
                   >
-                    {tr("Tạo", "Create")}
-                  </button>
-                </form>
+                    <input
+                      name="label_color"
+                      type="color"
+                      defaultValue="#6957c8"
+                      className="h-9 w-10 rounded-md border bg-white p-1"
+                      aria-label={tr("Màu nhãn", "Label color")}
+                    />
+                    <Input
+                      name="label_name"
+                      required
+                      maxLength={40}
+                      placeholder={tr("Tên nhãn mới", "New label name")}
+                      className="min-w-0 flex-1"
+                    />
+                    <Button type="submit" size="sm" disabled={labelBusy}>
+                      <Plus /> {tr("Tạo", "Create")}
+                    </Button>
+                  </form>
+                  <div className="max-h-48 overflow-y-auto p-2">
+                    {projectLabels.map((label) => (
+                      <div
+                        key={label.id}
+                        className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-white"
+                      >
+                        <span
+                          className="size-2.5 rounded-full"
+                          style={{ backgroundColor: label.color }}
+                        />
+                        <span className="min-w-0 flex-1 truncate text-xs font-semibold text-[#172b4d]">
+                          {label.name}
+                        </span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="size-7"
+                          onClick={() => setEditingLabel(label)}
+                          aria-label={tr("Sửa nhãn", "Edit label")}
+                        >
+                          <Pencil />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="size-7 text-[#ae2a19]"
+                          onClick={() => setDeletingLabel(label)}
+                          aria-label={tr("Xóa nhãn", "Delete label")}
+                        >
+                          <Trash2 />
+                        </Button>
+                      </div>
+                    ))}
+                    {!projectLabels.length && (
+                      <p className="px-2 py-3 text-center text-xs text-[#8993a4]">
+                        {tr("Dự án chưa có nhãn", "This project has no labels")}
+                      </p>
+                    )}
+                  </div>
+                </div>
               )}
             </Property>
             <div className="mt-8 rounded-lg border border-[#e0e5e2] bg-white p-3">
@@ -2037,6 +2197,123 @@ function TaskDrawer({
           </aside>
         </div>
       </aside>
+      {editingLabel && (
+        <div
+          className="fixed inset-0 z-[120] grid place-items-center bg-[#08042f]/45 p-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-label={tr("Chỉnh sửa nhãn", "Edit label")}
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !labelBusy)
+              setEditingLabel(null);
+          }}
+        >
+          <Card className="w-full max-w-md p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-semibold text-[#172b4d]">
+                  {tr("Chỉnh sửa nhãn", "Edit label")}
+                </h2>
+                <p className="mt-1 text-sm text-[#5e6c84]">
+                  {tr(
+                    "Thay đổi sẽ áp dụng cho mọi task đang dùng nhãn này.",
+                    "Changes apply to every task using this label.",
+                  )}
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => setEditingLabel(null)}
+                disabled={labelBusy}
+                aria-label={tr("Đóng", "Close")}
+              >
+                <X />
+              </Button>
+            </div>
+            <form onSubmit={updateLabel} className="mt-5 space-y-4">
+              <label className="block text-sm font-semibold text-[#172b4d]">
+                {tr("Tên nhãn", "Label name")}
+                <Input
+                  name="label_name"
+                  required
+                  maxLength={40}
+                  defaultValue={editingLabel.name}
+                  className="mt-2"
+                />
+              </label>
+              <label className="block text-sm font-semibold text-[#172b4d]">
+                {tr("Màu sắc", "Color")}
+                <div className="mt-2 flex items-center gap-3 rounded-lg border border-[#dfe1e6] p-3">
+                  <input
+                    name="label_color"
+                    type="color"
+                    defaultValue={editingLabel.color}
+                    className="h-9 w-12 rounded-md border bg-white p-1"
+                    aria-label={tr("Màu nhãn", "Label color")}
+                  />
+                  <Badge
+                    variant="outline"
+                    style={{
+                      color: editingLabel.color,
+                      borderColor: `${editingLabel.color}45`,
+                      backgroundColor: `${editingLabel.color}12`,
+                    }}
+                  >
+                    <span
+                      className="size-2 rounded-full"
+                      style={{ backgroundColor: editingLabel.color }}
+                    />
+                    {editingLabel.name}
+                  </Badge>
+                </div>
+              </label>
+              <div className="flex justify-between gap-2 pt-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="text-[#ae2a19] hover:bg-[#fff1f0] hover:text-[#ae2a19]"
+                  onClick={() => {
+                    setDeletingLabel(editingLabel);
+                    setEditingLabel(null);
+                  }}
+                  disabled={labelBusy}
+                >
+                  <Trash2 /> {tr("Xóa nhãn", "Delete label")}
+                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setEditingLabel(null)}
+                    disabled={labelBusy}
+                  >
+                    {tr("Hủy", "Cancel")}
+                  </Button>
+                  <Button type="submit" disabled={labelBusy}>
+                    {labelBusy
+                      ? tr("Đang lưu…", "Saving…")
+                      : tr("Lưu thay đổi", "Save changes")}
+                  </Button>
+                </div>
+              </div>
+            </form>
+          </Card>
+        </div>
+      )}
+      <ConfirmDialog
+        open={!!deletingLabel}
+        title={tr("Xóa nhãn?", "Delete label?")}
+        description={tr(
+          `Nhãn “${deletingLabel?.name}” sẽ bị xóa khỏi tất cả task trong dự án. Hành động này không thể hoàn tác.`,
+          `“${deletingLabel?.name}” will be removed from every task in this project. This cannot be undone.`,
+        )}
+        confirmLabel={tr("Xóa nhãn", "Delete label")}
+        busy={labelBusy}
+        onConfirm={deleteLabel}
+        onClose={() => setDeletingLabel(null)}
+      />
       <ConfirmDialog
         open={confirmDelete}
         title={tr("Xóa task?", "Delete task?")}
