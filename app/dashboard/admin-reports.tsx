@@ -16,6 +16,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { SelectField } from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { cn, formatDuration, initials } from "@/lib/utils";
 import type { DashboardData, Role, TaskStatus, TimeEntry } from "@/lib/types";
 import { useI18n } from "@/lib/i18n";
@@ -369,9 +377,39 @@ export function AdminReports({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {isManager && (
-            <SelectField value={memberId} onValueChange={setMemberId} ariaLabel={tr("Chọn phạm vi nhân sự", "Select employee scope")} className="h-9 w-auto min-w-40 border-[#c7c2ee] bg-[#f5f3ff] text-xs font-bold text-[#130b5c] shadow-none" options={[{ value: "all", label: `👥 ${tr("Toàn công ty", "Entire company")}` }, { value: data.profile.id, label: `◎ ${tr("Của tôi", "Mine")}` }, ...data.members.filter((member) => member.id !== data.profile.id).map((member) => ({ value: member.id, label: member.full_name }))]} />
+            <SelectField
+              value={memberId}
+              onValueChange={setMemberId}
+              ariaLabel={tr("Chọn phạm vi nhân sự", "Select employee scope")}
+              className="h-9 w-auto min-w-40 border-[#c7c2ee] bg-[#f5f3ff] text-xs font-bold text-[#130b5c] shadow-none"
+              options={[
+                {
+                  value: "all",
+                  label: `👥 ${tr("Toàn công ty", "Entire company")}`,
+                },
+                { value: data.profile.id, label: `◎ ${tr("Của tôi", "Mine")}` },
+                ...data.members
+                  .filter((member) => member.id !== data.profile.id)
+                  .map((member) => ({
+                    value: member.id,
+                    label: member.full_name,
+                  })),
+              ]}
+            />
           )}
-          <SelectField value={projectId} onValueChange={setProjectId} ariaLabel={tr("Chọn dự án báo cáo", "Select report project")} className="h-9 w-auto min-w-40 text-xs font-semibold shadow-none" options={[{ value: "all", label: tr("Tất cả dự án", "All projects") }, ...data.projects.map((project) => ({ value: project.id, label: project.name }))]} />
+          <SelectField
+            value={projectId}
+            onValueChange={setProjectId}
+            ariaLabel={tr("Chọn dự án báo cáo", "Select report project")}
+            className="h-9 w-auto min-w-40 text-xs font-semibold shadow-none"
+            options={[
+              { value: "all", label: tr("Tất cả dự án", "All projects") },
+              ...data.projects.map((project) => ({
+                value: project.id,
+                label: project.name,
+              })),
+            ]}
+          />
           <div className="flex rounded-md border border-[#dfe1e6] bg-white p-0.5">
             {ranges.map((item) => (
               <button
@@ -604,129 +642,124 @@ export function AdminReports({
               {projectRows.length} dự án
             </Badge>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] text-left">
-              <thead>
-                <tr className="bg-[#f7f8f9] text-[10px] font-bold uppercase tracking-wider text-[#6b778c]">
-                  <th className="px-5 py-3">Dự án</th>
-                  <th className="px-4 py-3">Tiến độ</th>
-                  <th className="px-4 py-3">Task</th>
-                  <th className="px-4 py-3">Giờ đã ghi</th>
-                  <th className="px-5 py-3">Ngân sách</th>
-                </tr>
-              </thead>
-              <tbody>
-                {projectRows.map((row) => (
-                  <tr
-                    key={row.project.id}
-                    className="border-t border-[#ebecf0]"
-                  >
-                    <td className="px-5 py-4">
-                      <div className="flex items-center gap-3">
-                        <i
-                          className="h-9 w-2 rounded-full"
-                          style={{ background: row.project.color }}
-                        />
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <b className="text-sm">{row.project.name}</b>
-                            <Badge
-                              className={
-                                row.project.status === "active"
-                                  ? "bg-[#dcfff1] text-[9px] text-[#216e4e]"
-                                  : row.project.status === "completed"
-                                    ? "bg-[#e9e7fb] text-[9px] text-[#130b5c]"
-                                    : "bg-[#f1f2f4] text-[9px] text-[#44546f]"
-                              }
-                            >
-                              {row.project.status.replaceAll("_", " ")}
-                            </Badge>
-                          </div>
-                          <p className="mt-0.5 text-[11px] text-[#8993a4]">
-                            {row.project.client_name ?? "Nội bộ"}
-                          </p>
+          <Table className="min-w-[720px]">
+            <TableHeader>
+              <TableRow>
+                <TableHead className="px-5">Dự án</TableHead>
+                <TableHead>Tiến độ</TableHead>
+                <TableHead>Task</TableHead>
+                <TableHead>Giờ đã ghi</TableHead>
+                <TableHead className="px-5">Ngân sách</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {projectRows.map((row) => (
+                <TableRow key={row.project.id}>
+                  <TableCell className="px-5 py-4">
+                    <div className="flex items-center gap-3">
+                      <i
+                        className="h-9 w-2 rounded-full"
+                        style={{ background: row.project.color }}
+                      />
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <b className="text-sm">{row.project.name}</b>
+                          <Badge
+                            className={
+                              row.project.status === "active"
+                                ? "bg-[#dcfff1] text-[9px] text-[#216e4e]"
+                                : row.project.status === "completed"
+                                  ? "bg-[#e9e7fb] text-[9px] text-[#130b5c]"
+                                  : "bg-[#f1f2f4] text-[9px] text-[#44546f]"
+                            }
+                          >
+                            {row.project.status.replaceAll("_", " ")}
+                          </Badge>
                         </div>
+                        <p className="mt-0.5 text-[11px] text-[#8993a4]">
+                          {row.project.client_name ?? "Nội bộ"}
+                        </p>
                       </div>
-                    </td>
-                    <td className="px-4 py-4">
-                      <div className="flex items-center gap-2">
-                        <div className="h-1.5 w-20 rounded-full bg-[#ebecf0]">
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <div className="h-1.5 w-20 rounded-full bg-[#ebecf0]">
+                        <div
+                          className="h-full rounded-full bg-[#22a06b]"
+                          style={{ width: `${row.progress}%` }}
+                        />
+                      </div>
+                      <Badge className="bg-[#dcfff1] text-[#216e4e]">
+                        {row.progress}%
+                      </Badge>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <Badge className="bg-[#f1f2f4] text-[#44546f]">
+                      {row.tasks} task
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge className="bg-[#eeeefe] font-mono text-[#130b5c]">
+                      {row.hours.toFixed(1)}h
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="px-5">
+                    {row.project.budget_hours ? (
+                      <div>
+                        <div className="flex items-center justify-between text-[11px]">
+                          <Badge
+                            className={
+                              row.budgetPercent >= 100
+                                ? "bg-[#fff1f0] text-[#ae2a19]"
+                                : row.budgetPercent >= 80
+                                  ? "bg-[#fff7d6] text-[#7f5f01]"
+                                  : "bg-[#e9f2ff] text-[#0055cc]"
+                            }
+                          >
+                            {row.budgetPercent}%
+                          </Badge>
+                          <span className="text-[#8993a4]">
+                            /{row.project.budget_hours}h
+                          </span>
+                        </div>
+                        <div className="mt-1.5 h-1.5 w-28 rounded-full bg-[#ebecf0]">
                           <div
-                            className="h-full rounded-full bg-[#22a06b]"
-                            style={{ width: `${row.progress}%` }}
+                            className={cn(
+                              "h-full rounded-full",
+                              row.budgetPercent >= 100
+                                ? "bg-[#c9372c]"
+                                : row.budgetPercent >= 80
+                                  ? "bg-[#e2a319]"
+                                  : "bg-[#0c66e4]",
+                            )}
+                            style={{
+                              width: `${Math.min(row.budgetPercent, 100)}%`,
+                            }}
                           />
                         </div>
-                        <Badge className="bg-[#dcfff1] text-[#216e4e]">
-                          {row.progress}%
-                        </Badge>
                       </div>
-                    </td>
-                    <td className="px-4 py-4">
-                      <Badge className="bg-[#f1f2f4] text-[#44546f]">
-                        {row.tasks} task
+                    ) : (
+                      <Badge className="bg-[#f1f2f4] text-[#6b778c]">
+                        Chưa đặt
                       </Badge>
-                    </td>
-                    <td className="px-4 py-4">
-                      <Badge className="bg-[#eeeefe] font-mono text-[#130b5c]">
-                        {row.hours.toFixed(1)}h
-                      </Badge>
-                    </td>
-                    <td className="px-5 py-4">
-                      {row.project.budget_hours ? (
-                        <div>
-                          <div className="flex items-center justify-between text-[11px]">
-                            <Badge
-                              className={
-                                row.budgetPercent >= 100
-                                  ? "bg-[#fff1f0] text-[#ae2a19]"
-                                  : row.budgetPercent >= 80
-                                    ? "bg-[#fff7d6] text-[#7f5f01]"
-                                    : "bg-[#e9f2ff] text-[#0055cc]"
-                              }
-                            >
-                              {row.budgetPercent}%
-                            </Badge>
-                            <span className="text-[#8993a4]">
-                              /{row.project.budget_hours}h
-                            </span>
-                          </div>
-                          <div className="mt-1.5 h-1.5 w-28 rounded-full bg-[#ebecf0]">
-                            <div
-                              className={cn(
-                                "h-full rounded-full",
-                                row.budgetPercent >= 100
-                                  ? "bg-[#c9372c]"
-                                  : row.budgetPercent >= 80
-                                    ? "bg-[#e2a319]"
-                                    : "bg-[#0c66e4]",
-                              )}
-                              style={{
-                                width: `${Math.min(row.budgetPercent, 100)}%`,
-                              }}
-                            />
-                          </div>
-                        </div>
-                      ) : (
-                        <Badge className="bg-[#f1f2f4] text-[#6b778c]">
-                          Chưa đặt
-                        </Badge>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-                {!projectRows.length && (
-                  <tr>
-                    <td
-                      colSpan={5}
-                      className="p-8 text-center text-sm text-[#8993a4]"
-                    >
-                      Chưa có dữ liệu dự án
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+              {!projectRows.length && (
+                <TableRow>
+                  <TableCell
+                    colSpan={5}
+                    className="p-8 text-center text-sm text-[#8993a4]"
+                  >
+                    Chưa có dữ liệu dự án
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
         </Card>
         <Card className="p-5">
           <div className="flex items-center gap-2">
@@ -790,93 +823,91 @@ export function AdminReports({
             <Users size={13} /> {memberRows.length} thành viên
           </Badge>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[760px] text-left">
-            <thead>
-              <tr className="bg-[#f7f8f9] text-[10px] font-bold uppercase tracking-wider text-[#6b778c]">
-                <th className="px-5 py-3">Nhân sự</th>
-                <th className="px-4 py-3">Role</th>
-                <th className="px-4 py-3">Giờ ghi nhận</th>
-                <th className="px-4 py-3">Mức sử dụng</th>
-                <th className="px-4 py-3">Task đang làm</th>
-                <th className="px-5 py-3">Quá hạn</th>
-              </tr>
-            </thead>
-            <tbody>
-              {memberRows.map((row) => (
-                <tr key={row.member.id} className="border-t border-[#ebecf0]">
-                  <td className="px-5 py-3.5">
-                    <div className="flex items-center gap-3">
-                      <span className="grid h-8 w-8 place-items-center rounded-full bg-[#e9e7fb] text-[10px] font-bold text-[#130b5c]">
-                        {initials(row.member.full_name)}
-                      </span>
-                      <div>
-                        <b className="text-sm">{row.member.full_name}</b>
-                        <p className="text-[10px] text-[#8993a4]">
-                          {row.member.email}
-                        </p>
-                      </div>
+        <Table className="min-w-[760px]">
+          <TableHeader>
+            <TableRow>
+              <TableHead className="px-5">Nhân sự</TableHead>
+              <TableHead>Role</TableHead>
+              <TableHead>Giờ ghi nhận</TableHead>
+              <TableHead>Mức sử dụng</TableHead>
+              <TableHead>Task đang làm</TableHead>
+              <TableHead className="px-5">Quá hạn</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {memberRows.map((row) => (
+              <TableRow key={row.member.id}>
+                <TableCell className="px-5">
+                  <div className="flex items-center gap-3">
+                    <span className="grid h-8 w-8 place-items-center rounded-full bg-[#e9e7fb] text-[10px] font-bold text-[#130b5c]">
+                      {initials(row.member.full_name)}
+                    </span>
+                    <div>
+                      <b className="text-sm">{row.member.full_name}</b>
+                      <p className="text-[10px] text-[#8993a4]">
+                        {row.member.email}
+                      </p>
                     </div>
-                  </td>
-                  <td className="px-4 py-3.5">
-                    <RoleBadge role={row.member.role} />
-                  </td>
-                  <td className="px-4 py-3.5">
-                    <Badge className="bg-[#eeeefe] font-mono text-[#130b5c]">
-                      {row.hours.toFixed(1)}h
-                    </Badge>
-                  </td>
-                  <td className="px-4 py-3.5">
-                    <div className="flex items-center gap-2">
-                      <div className="h-1.5 w-24 rounded-full bg-[#ebecf0]">
-                        <div
-                          className={cn(
-                            "h-full rounded-full",
-                            row.utilization > 110
-                              ? "bg-[#c9372c]"
-                              : row.utilization >= 80
-                                ? "bg-[#22a06b]"
-                                : "bg-[#0c66e4]",
-                          )}
-                          style={{
-                            width: `${Math.min(row.utilization, 100)}%`,
-                          }}
-                        />
-                      </div>
-                      <Badge
-                        className={
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <RoleBadge role={row.member.role} />
+                </TableCell>
+                <TableCell>
+                  <Badge className="bg-[#eeeefe] font-mono text-[#130b5c]">
+                    {row.hours.toFixed(1)}h
+                  </Badge>
+                </TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-2">
+                    <div className="h-1.5 w-24 rounded-full bg-[#ebecf0]">
+                      <div
+                        className={cn(
+                          "h-full rounded-full",
                           row.utilization > 110
-                            ? "bg-[#fff1f0] text-[#ae2a19]"
+                            ? "bg-[#c9372c]"
                             : row.utilization >= 80
-                              ? "bg-[#dcfff1] text-[#216e4e]"
-                              : "bg-[#e9f2ff] text-[#0055cc]"
-                        }
-                      >
-                        {row.utilization}%
-                      </Badge>
+                              ? "bg-[#22a06b]"
+                              : "bg-[#0c66e4]",
+                        )}
+                        style={{
+                          width: `${Math.min(row.utilization, 100)}%`,
+                        }}
+                      />
                     </div>
-                  </td>
-                  <td className="px-4 py-3.5">
-                    <Badge className="bg-[#e9f2ff] text-[#0055cc]">
-                      {row.activeTasks} task
-                    </Badge>
-                  </td>
-                  <td className="px-5 py-3.5">
                     <Badge
                       className={
-                        row.overdue
+                        row.utilization > 110
                           ? "bg-[#fff1f0] text-[#ae2a19]"
-                          : "bg-[#dcfff1] text-[#216e4e]"
+                          : row.utilization >= 80
+                            ? "bg-[#dcfff1] text-[#216e4e]"
+                            : "bg-[#e9f2ff] text-[#0055cc]"
                       }
                     >
-                      {row.overdue ? `${row.overdue} quá hạn` : "Đúng hạn"}
+                      {row.utilization}%
                     </Badge>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <Badge className="bg-[#e9f2ff] text-[#0055cc]">
+                    {row.activeTasks} task
+                  </Badge>
+                </TableCell>
+                <TableCell className="px-5">
+                  <Badge
+                    className={
+                      row.overdue
+                        ? "bg-[#fff1f0] text-[#ae2a19]"
+                        : "bg-[#dcfff1] text-[#216e4e]"
+                    }
+                  >
+                    {row.overdue ? `${row.overdue} quá hạn` : "Đúng hạn"}
+                  </Badge>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       </Card>
 
       <Card className="mt-5 overflow-hidden">
@@ -891,84 +922,82 @@ export function AdminReports({
             {scopedEntries.length} bản ghi
           </Badge>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[760px] text-left">
-            <thead>
-              <tr className="bg-[#f7f8f9] text-[10px] font-bold uppercase tracking-wider text-[#6b778c]">
-                <th className="px-5 py-3">Thời gian</th>
-                <th className="px-4 py-3">Nhân sự</th>
-                <th className="px-4 py-3">Công việc</th>
-                <th className="px-4 py-3">Dự án</th>
-                <th className="px-5 py-3 text-right">Thời lượng</th>
-              </tr>
-            </thead>
-            <tbody>
-              {scopedEntries.slice(0, 20).map((entry) => {
-                const task = taskMap.get(entry.task_id);
-                const member = data.members.find(
-                  (item) => item.id === entry.user_id,
-                );
-                const project = data.projects.find(
-                  (item) => item.id === task?.project_id,
-                );
-                return (
-                  <tr key={entry.id} className="border-t border-[#ebecf0]">
-                    <td className="px-5 py-3.5 text-xs text-[#5e6c84]">
-                      {new Date(entry.started_at).toLocaleString("vi-VN")}
-                    </td>
-                    <td className="px-4 py-3.5">
-                      <Badge className="gap-1.5 bg-[#f1f2f4] text-[#44546f]">
-                        <span className="grid h-4 w-4 place-items-center rounded-full bg-white text-[7px]">
-                          {initials(member?.full_name ?? "?")}
-                        </span>
-                        {member?.full_name ?? "—"}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3.5">
-                      <div className="max-w-xs truncate text-sm">
-                        {task?.title ?? "Task đã xóa"}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3.5">
-                      <Badge className="gap-1.5 bg-[#f7f8f9] text-[#44546f]">
-                        <i
-                          className="h-2 w-2 rounded-sm"
-                          style={{ background: project?.color ?? "#8993a4" }}
-                        />
-                        {project?.name ?? "—"}
-                      </Badge>
-                    </td>
-                    <td className="px-5 py-3.5 text-right">
-                      <Badge
-                        className={
-                          !entry.ended_at
-                            ? "bg-[#e9f2ff] font-mono text-[#0055cc]"
-                            : "bg-[#dcfff1] font-mono text-[#216e4e]"
-                        }
-                      >
-                        {!entry.ended_at && (
-                          <span className="mr-1 inline-flex h-1.5 w-1.5 animate-pulse rounded-full bg-[#22a06b]" />
-                        )}
-                        {formatDuration(entrySeconds(entry, now)).slice(0, 8)} ·{" "}
-                        {entry.ended_at ? "Đã ghi" : "Đang chạy"}
-                      </Badge>
-                    </td>
-                  </tr>
-                );
-              })}
-              {!scopedEntries.length && (
-                <tr>
-                  <td
-                    colSpan={5}
-                    className="p-8 text-center text-sm text-[#8993a4]"
-                  >
-                    Chưa có time log trong phạm vi này
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+        <Table className="min-w-[760px]">
+          <TableHeader>
+            <TableRow>
+              <TableHead className="px-5">Thời gian</TableHead>
+              <TableHead>Nhân sự</TableHead>
+              <TableHead>Công việc</TableHead>
+              <TableHead>Dự án</TableHead>
+              <TableHead className="px-5 text-right">Thời lượng</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {scopedEntries.slice(0, 20).map((entry) => {
+              const task = taskMap.get(entry.task_id);
+              const member = data.members.find(
+                (item) => item.id === entry.user_id,
+              );
+              const project = data.projects.find(
+                (item) => item.id === task?.project_id,
+              );
+              return (
+                <TableRow key={entry.id}>
+                  <TableCell className="px-5 text-xs text-[#5e6c84]">
+                    {new Date(entry.started_at).toLocaleString("vi-VN")}
+                  </TableCell>
+                  <TableCell>
+                    <Badge className="gap-1.5 bg-[#f1f2f4] text-[#44546f]">
+                      <span className="grid h-4 w-4 place-items-center rounded-full bg-white text-[7px]">
+                        {initials(member?.full_name ?? "?")}
+                      </span>
+                      {member?.full_name ?? "—"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <div className="max-w-xs truncate text-sm">
+                      {task?.title ?? "Task đã xóa"}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <Badge className="gap-1.5 bg-[#f7f8f9] text-[#44546f]">
+                      <i
+                        className="h-2 w-2 rounded-sm"
+                        style={{ background: project?.color ?? "#8993a4" }}
+                      />
+                      {project?.name ?? "—"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="px-5 text-right">
+                    <Badge
+                      className={
+                        !entry.ended_at
+                          ? "bg-[#e9f2ff] font-mono text-[#0055cc]"
+                          : "bg-[#dcfff1] font-mono text-[#216e4e]"
+                      }
+                    >
+                      {!entry.ended_at && (
+                        <span className="mr-1 inline-flex h-1.5 w-1.5 animate-pulse rounded-full bg-[#22a06b]" />
+                      )}
+                      {formatDuration(entrySeconds(entry, now)).slice(0, 8)} ·{" "}
+                      {entry.ended_at ? "Đã ghi" : "Đang chạy"}
+                    </Badge>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+            {!scopedEntries.length && (
+              <TableRow>
+                <TableCell
+                  colSpan={5}
+                  className="p-8 text-center text-sm text-[#8993a4]"
+                >
+                  Chưa có time log trong phạm vi này
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
       </Card>
     </div>
   );

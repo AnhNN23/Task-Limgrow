@@ -66,6 +66,14 @@ import { ActivityTracking } from "./activity-tracking";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { DatePicker } from "@/components/ui/date-picker";
 import { SelectField } from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { LanguageSwitcher, useI18n } from "@/lib/i18n";
 
 type View = "overview" | "tasks" | "projects" | "team" | "tracking" | "reports";
@@ -928,134 +936,117 @@ function TaskTable({
       />
     );
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[760px] border-collapse text-left">
-        <thead>
-          <tr className="bg-[#fafbfa] text-xs uppercase tracking-wider text-[#87908c]">
-            <th className="px-5 py-3 font-semibold">
-              {tr("Công việc", "Task")}
-            </th>
-            <th className="px-4 py-3 font-semibold">
-              {tr("Dự án", "Project")}
-            </th>
-            <th className="px-4 py-3 font-semibold">
-              {tr("Ưu tiên", "Priority")}
-            </th>
-            <th className="px-4 py-3 font-semibold">
-              {tr("Trạng thái", "Status")}
-            </th>
-            <th className="px-5 py-3 text-right font-semibold">
-              {tr("Thời gian", "Time")}
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {tasks.map((task) => {
-            const project = data.projects.find(
-              (item) => item.id === task.project_id,
-            );
-            const member = data.members.find(
-              (item) => item.id === task.assignee_id,
-            );
-            const isRunning = activeEntry?.task_id === task.id;
-            const seconds = data.timeEntries
-              .filter((entry) => entry.task_id === task.id)
-              .reduce((sum, entry) => sum + entry.duration_seconds, 0);
-            return (
-              <tr
-                key={task.id}
-                className="border-t border-[#edf0ee] hover:bg-[#fbfcfb]"
-              >
-                <td className="px-5 py-4">
-                  <div className="flex items-center gap-3">
-                    <button
-                      onClick={() => onToggleTimer(task)}
-                      className={cn(
-                        "grid h-8 w-8 shrink-0 place-items-center rounded-full border transition",
-                        isRunning
-                          ? "border-[#c54141] bg-[#fff0ed] text-[#c54141]"
-                          : "border-[#cdd5d1] text-[#130b5c] hover:border-[#130b5c] hover:bg-[#eeeefe]",
-                      )}
-                    >
-                      {isRunning ? (
-                        <CircleStop size={14} />
-                      ) : (
-                        <Play size={14} fill="currentColor" />
-                      )}
-                    </button>
-                    <div>
-                      <p className="text-sm font-semibold">{task.title}</p>
-                      <p className="mt-1 text-xs text-[#89928e]">
-                        {member?.full_name ?? tr("Chưa giao", "Unassigned")}
-                        {task.due_date
-                          ? ` · ${new Date(task.due_date).toLocaleDateString(dateLocale)}`
-                          : ""}
-                      </p>
-                    </div>
-                  </div>
-                </td>
-                <td className="px-4 py-4">
-                  <span className="flex items-center gap-2 text-sm">
-                    <i
-                      className="h-2.5 w-2.5 rounded-full"
-                      style={{ background: project?.color ?? "#9aa39f" }}
-                    />
-                    {project?.name ?? "—"}
-                  </span>
-                </td>
-                <td className="px-4 py-4">
-                  <span className="flex items-center gap-2 text-sm">
-                    <i
-                      className={cn(
-                        "h-2 w-2 rounded-full",
-                        priorityMeta[task.priority].dot,
-                      )}
-                    />
-                    {tr(
-                      priorityMeta[task.priority].label,
-                      ({ low: "Low", medium: "Medium", high: "High" } as const)[
-                        task.priority
-                      ],
-                    )}
-                  </span>
-                </td>
-                <td className="px-4 py-4">
-                  <SelectField
-                    value={task.status}
-                    onValueChange={(value) =>
-                      onStatus(task, value as TaskStatus)
-                    }
+    <Table className="min-w-[760px]">
+      <TableHeader>
+        <TableRow>
+          <TableHead className="px-5">{tr("Công việc", "Task")}</TableHead>
+          <TableHead>{tr("Dự án", "Project")}</TableHead>
+          <TableHead>{tr("Ưu tiên", "Priority")}</TableHead>
+          <TableHead>{tr("Trạng thái", "Status")}</TableHead>
+          <TableHead className="px-5 text-right">
+            {tr("Thời gian", "Time")}
+          </TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {tasks.map((task) => {
+          const project = data.projects.find(
+            (item) => item.id === task.project_id,
+          );
+          const member = data.members.find(
+            (item) => item.id === task.assignee_id,
+          );
+          const isRunning = activeEntry?.task_id === task.id;
+          const seconds = data.timeEntries
+            .filter((entry) => entry.task_id === task.id)
+            .reduce((sum, entry) => sum + entry.duration_seconds, 0);
+          return (
+            <TableRow key={task.id}>
+              <TableCell className="px-5 py-4">
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => onToggleTimer(task)}
                     className={cn(
-                      "h-8 w-auto min-w-28 rounded-full border-0 text-xs font-semibold shadow-none",
-                      statusMeta[task.status].style,
+                      "grid h-8 w-8 shrink-0 place-items-center rounded-full border transition",
+                      isRunning
+                        ? "border-[#c54141] bg-[#fff0ed] text-[#c54141]"
+                        : "border-[#cdd5d1] text-[#130b5c] hover:border-[#130b5c] hover:bg-[#eeeefe]",
                     )}
-                    options={Object.entries(statusMeta).map(
-                      ([value, meta]) => ({
-                        value,
-                        label: tr(
-                          meta.label,
-                          (
-                            {
-                              todo: "To do",
-                              in_progress: "In progress",
-                              review: "In review",
-                              done: "Done",
-                            } as const
-                          )[value as TaskStatus],
-                        ),
-                      }),
+                  >
+                    {isRunning ? (
+                      <CircleStop size={14} />
+                    ) : (
+                      <Play size={14} fill="currentColor" />
+                    )}
+                  </button>
+                  <div>
+                    <p className="text-sm font-semibold">{task.title}</p>
+                    <p className="mt-1 text-xs text-[#89928e]">
+                      {member?.full_name ?? tr("Chưa giao", "Unassigned")}
+                      {task.due_date
+                        ? ` · ${new Date(task.due_date).toLocaleDateString(dateLocale)}`
+                        : ""}
+                    </p>
+                  </div>
+                </div>
+              </TableCell>
+              <TableCell>
+                <span className="flex items-center gap-2 text-sm">
+                  <i
+                    className="h-2.5 w-2.5 rounded-full"
+                    style={{ background: project?.color ?? "#9aa39f" }}
+                  />
+                  {project?.name ?? "—"}
+                </span>
+              </TableCell>
+              <TableCell>
+                <span className="flex items-center gap-2 text-sm">
+                  <i
+                    className={cn(
+                      "h-2 w-2 rounded-full",
+                      priorityMeta[task.priority].dot,
                     )}
                   />
-                </td>
-                <td className="px-5 py-4 text-right font-mono text-sm font-semibold text-[#59645f]">
-                  {formatDuration(seconds).slice(0, 5)}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
+                  {tr(
+                    priorityMeta[task.priority].label,
+                    ({ low: "Low", medium: "Medium", high: "High" } as const)[
+                      task.priority
+                    ],
+                  )}
+                </span>
+              </TableCell>
+              <TableCell>
+                <SelectField
+                  value={task.status}
+                  onValueChange={(value) => onStatus(task, value as TaskStatus)}
+                  className={cn(
+                    "h-8 w-auto min-w-28 rounded-full border-0 text-xs font-semibold shadow-none",
+                    statusMeta[task.status].style,
+                  )}
+                  options={Object.entries(statusMeta).map(([value, meta]) => ({
+                    value,
+                    label: tr(
+                      meta.label,
+                      (
+                        {
+                          todo: "To do",
+                          in_progress: "In progress",
+                          review: "In review",
+                          done: "Done",
+                        } as const
+                      )[value as TaskStatus],
+                    ),
+                  }))}
+                />
+              </TableCell>
+              <TableCell className="px-5 text-right font-mono font-semibold text-[#59645f]">
+                {formatDuration(seconds).slice(0, 5)}
+              </TableCell>
+            </TableRow>
+          );
+        })}
+      </TableBody>
+    </Table>
   );
 }
 
@@ -1423,24 +1414,20 @@ function TeamView({
           )}
         </div>
       </div>
-      <div className="mt-7 overflow-x-auto rounded-xl border border-[#e1e6e3] bg-white">
-        <table className="w-full min-w-[760px] text-left">
-          <thead>
-            <tr className="bg-[#fafbfa] text-[11px] uppercase tracking-wider text-[#89928e]">
-              <th className="px-5 py-3">{tr("Thành viên", "Member")}</th>
-              <th className="px-4 py-3">
-                {tr("Bộ phận / Role", "Department / Role")}
-              </th>
-              <th className="px-4 py-3">
-                {tr("Task đang làm", "Active tasks")}
-              </th>
-              <th className="px-4 py-3">
-                {tr("Giờ tuần này", "Hours this week")}
-              </th>
-              <th className="px-4 py-3">{tr("Thao tác", "Actions")}</th>
-            </tr>
-          </thead>
-          <tbody>
+      <div className="mt-7 overflow-hidden rounded-xl border border-[#dfe1e6] bg-white shadow-[0_1px_2px_rgba(9,30,66,.08)]">
+        <Table className="min-w-[760px]">
+          <TableHeader>
+            <TableRow>
+              <TableHead className="px-5">
+                {tr("Thành viên", "Member")}
+              </TableHead>
+              <TableHead>{tr("Bộ phận / Role", "Department / Role")}</TableHead>
+              <TableHead>{tr("Task đang làm", "Active tasks")}</TableHead>
+              <TableHead>{tr("Giờ tuần này", "Hours this week")}</TableHead>
+              <TableHead>{tr("Thao tác", "Actions")}</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {data.members.map((member) => {
               const activeTasks = data.tasks.filter(
                 (task) =>
@@ -1457,8 +1444,8 @@ function TeamView({
                   .reduce((sum, entry) => sum + entry.duration_seconds, 0) /
                 3600;
               return (
-                <tr key={member.id} className="border-t border-[#edf0ee]">
-                  <td className="px-5 py-4">
+                <TableRow key={member.id}>
+                  <TableCell className="px-5 py-4">
                     <div className="flex items-center gap-3">
                       <span className="grid h-10 w-10 place-items-center rounded-full bg-[#e8e7fb] text-xs font-bold text-[#130b5c]">
                         {initials(member.full_name)}
@@ -1472,8 +1459,8 @@ function TeamView({
                         </p>
                       </div>
                     </div>
-                  </td>
-                  <td className="px-4 py-4">
+                  </TableCell>
+                  <TableCell>
                     {isManager && member.id !== data.profile.id ? (
                       <SelectField
                         value={member.role}
@@ -1496,14 +1483,12 @@ function TeamView({
                         {roleLabels[member.role]}
                       </Badge>
                     )}
-                  </td>
-                  <td className="px-4 py-4 text-sm font-semibold">
-                    {activeTasks}
-                  </td>
-                  <td className="px-4 py-4 font-mono text-sm">
+                  </TableCell>
+                  <TableCell className="font-semibold">{activeTasks}</TableCell>
+                  <TableCell className="font-mono">
                     {hours.toFixed(1)}h
-                  </td>
-                  <td className="px-4 py-4">
+                  </TableCell>
+                  <TableCell>
                     {isManager && member.id !== data.profile.id ? (
                       <div className="flex gap-1">
                         <Button
@@ -1528,12 +1513,12 @@ function TeamView({
                         {tr("Đang hoạt động", "Active")}
                       </Badge>
                     )}
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               );
             })}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
       {editing && (
         <EmployeeEditDialog

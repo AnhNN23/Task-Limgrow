@@ -58,12 +58,12 @@ export function DatePicker({
             variant="outline"
             disabled={disabled}
             className={cn(
-              "h-10 w-full justify-start px-3 text-sm font-medium",
+              "h-9 w-full justify-start px-3 text-sm font-medium",
               !current && "text-[#89928e]",
               className,
             )}
           >
-            <CalendarDays size={15} />
+            <CalendarDays />
             {current
               ? parseDate(current)?.toLocaleDateString(dateLocale, {
                   day: "2-digit",
@@ -81,7 +81,7 @@ export function DatePicker({
                 }}
                 className="ml-auto rounded p-0.5 hover:bg-[#edf0ee]"
               >
-                <X size={13} />
+                <X className="size-3.5" />
               </span>
             )}
           </Button>

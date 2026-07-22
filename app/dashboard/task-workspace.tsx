@@ -40,6 +40,14 @@ import { useToast } from "@/components/ui/toast";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { DatePicker } from "@/components/ui/date-picker";
 import { SelectField } from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { useI18n } from "@/lib/i18n";
 import { TeamWorkflow } from "./team-workflow";
 import type {
@@ -437,38 +445,30 @@ function ListView({
                 </Badge>
                 <Plus size={15} className="ml-auto text-[#8c9591]" />
               </div>
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[900px] text-left">
-                  <thead>
-                    <tr className="text-[11px] uppercase tracking-wider text-[#969d99]">
-                      <th className="w-[44%] px-4 py-2.5 font-semibold">
-                        Tên task
-                      </th>
-                      <th className="px-3 py-2.5 font-semibold">
-                        Người thực hiện
-                      </th>
-                      <th className="px-3 py-2.5 font-semibold">Ưu tiên</th>
-                      <th className="px-3 py-2.5 font-semibold">Hạn</th>
-                      <th className="px-3 py-2.5 text-right font-semibold">
-                        Thời gian
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {items.map((task) => (
-                      <TaskRow
-                        key={task.id}
-                        task={task}
-                        data={data}
-                        activeEntry={activeEntry}
-                        onOpen={onOpen}
-                        onTimer={onTimer}
-                        onStatus={onStatus}
-                      />
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <Table className="min-w-[900px]">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[44%]">Tên task</TableHead>
+                    <TableHead>Người thực hiện</TableHead>
+                    <TableHead>Ưu tiên</TableHead>
+                    <TableHead>Hạn</TableHead>
+                    <TableHead className="text-right">Thời gian</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {items.map((task) => (
+                    <TaskRow
+                      key={task.id}
+                      task={task}
+                      data={data}
+                      activeEntry={activeEntry}
+                      onOpen={onOpen}
+                      onTimer={onTimer}
+                      onStatus={onStatus}
+                    />
+                  ))}
+                </TableBody>
+              </Table>
             </Card>
           ),
       )}
@@ -499,8 +499,8 @@ function TaskRow({
     ? Math.round((seconds / estimateSeconds) * 100)
     : 0;
   return (
-    <tr className="group border-t border-[#edf0ee] hover:bg-[#f9fbfa]">
-      <td className="px-4 py-3">
+    <TableRow className="group">
+      <TableCell>
         <div className="flex items-center gap-3">
           <button
             onClick={() =>
@@ -539,8 +539,8 @@ function TaskRow({
             </p>
           </button>
         </div>
-      </td>
-      <td className="px-3 py-3">
+      </TableCell>
+      <TableCell>
         {member ? (
           <span className="flex items-center gap-2 text-xs">
             <Avatar name={member.full_name} small />
@@ -549,8 +549,8 @@ function TaskRow({
         ) : (
           <span className="text-xs text-[#a0a7a3]">Chưa giao</span>
         )}
-      </td>
-      <td className="px-3 py-3">
+      </TableCell>
+      <TableCell>
         <span
           className={cn(
             "flex items-center gap-1.5 text-xs font-semibold",
@@ -560,11 +560,11 @@ function TaskRow({
           <Flag size={13} fill="currentColor" />
           {priorityMeta[task.priority].label}
         </span>
-      </td>
-      <td className="px-3 py-3 text-xs text-[#69736e]">
+      </TableCell>
+      <TableCell className="text-xs text-[#69736e]">
         {task.due_date ? dateLabel(task.due_date) : "—"}
-      </td>
-      <td className="px-3 py-3">
+      </TableCell>
+      <TableCell>
         <div className="ml-auto w-28">
           <button
             onClick={() => onTimer(task)}
@@ -604,8 +604,8 @@ function TaskRow({
             </>
           )}
         </div>
-      </td>
-    </tr>
+      </TableCell>
+    </TableRow>
   );
 }
 

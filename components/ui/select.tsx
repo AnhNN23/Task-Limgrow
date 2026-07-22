@@ -17,14 +17,14 @@ function SelectTrigger({
   return (
     <SelectPrimitive.Trigger
       className={cn(
-        "flex h-10 w-full items-center justify-between gap-2 rounded-lg border border-[#dfe5e1] bg-white px-3 text-sm text-[#24302b] shadow-sm outline-none transition hover:border-[#c5cec9] focus:border-[#4c43b5] focus:ring-2 focus:ring-[#4c43b5]/15 disabled:cursor-not-allowed disabled:opacity-50 data-[placeholder]:text-[#89928e]",
+        "flex h-9 w-full items-center justify-between gap-2 rounded-md border border-[#dfe1e6] bg-white px-3 text-sm text-[#24302b] shadow-sm outline-none transition hover:border-[#b7bdc8] focus:border-[#4c43b5] focus:ring-2 focus:ring-[#4c43b5]/15 disabled:cursor-not-allowed disabled:bg-[#f1f2f4] disabled:opacity-60 data-[placeholder]:text-[#8993a4] [&_svg]:size-4 [&_svg]:shrink-0",
         className,
       )}
       {...props}
     >
       {children}
       <SelectPrimitive.Icon asChild>
-        <ChevronDown size={15} className="shrink-0 text-[#7d8782]" />
+        <ChevronDown className="text-[#6b778c]" />
       </SelectPrimitive.Icon>
     </SelectPrimitive.Trigger>
   );
@@ -41,7 +41,7 @@ function SelectContent({
       <SelectPrimitive.Content
         position={position}
         className={cn(
-          "z-[150] max-h-[min(320px,var(--radix-select-content-available-height))] min-w-[var(--radix-select-trigger-width)] overflow-hidden rounded-lg border border-[#dfe5e1] bg-white text-[#24302b] shadow-xl data-[state=open]:animate-in",
+          "z-[150] max-h-[min(320px,var(--radix-select-content-available-height))] min-w-[var(--radix-select-trigger-width)] overflow-hidden rounded-md border border-[#dfe1e6] bg-white text-[#24302b] shadow-[0_8px_24px_rgba(9,30,66,.18)] data-[state=open]:animate-in",
           className,
         )}
         {...props}
@@ -75,7 +75,7 @@ function SelectItem({
     >
       <span className="absolute left-2.5 grid h-4 w-4 place-items-center">
         <SelectPrimitive.ItemIndicator>
-          <Check size={14} />
+          <Check className="size-3.5" />
         </SelectPrimitive.ItemIndicator>
       </span>
       <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
