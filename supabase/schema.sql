@@ -300,7 +300,14 @@ create policy "PM manages project memberships" on public.project_members for all
 drop policy if exists "Users view available tasks" on public.tasks;
 create policy "Users view available tasks" on public.tasks for select to authenticated using (public.is_project_manager() or assignee_id = auth.uid() or public.is_project_member(project_id));
 drop policy if exists "PM creates tasks" on public.tasks;
-create policy "PM creates tasks" on public.tasks for insert to authenticated with check (public.is_project_manager());
+create policy "PM creates tasks" on public.tasks for insert to authenticated with check (
+  public.is_project_manager()
+  or (
+    created_by = auth.uid()
+    and assignee_id = auth.uid()
+    and public.is_project_member(project_id)
+  )
+);
 drop policy if exists "PM or assignee updates tasks" on public.tasks;
 create policy "PM or assignee updates tasks" on public.tasks for update to authenticated using (public.is_project_manager() or assignee_id = auth.uid()) with check (public.is_project_manager() or assignee_id = auth.uid());
 drop policy if exists "PM deletes tasks" on public.tasks;

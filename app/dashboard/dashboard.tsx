@@ -279,14 +279,16 @@ export function Dashboard({ initialData }: { initialData: DashboardData }) {
     setBusy(true);
     setError(null);
     const form = new FormData(event.currentTarget);
+    const requestedAssignee = String(form.get("assignee_id") || "");
     const payload = {
       title: String(form.get("title")),
       description: String(form.get("description") || "") || null,
       project_id: String(form.get("project_id")),
-      assignee_id:
-        String(form.get("assignee_id") || "") === "unassigned"
+      assignee_id: isManager
+        ? requestedAssignee === "unassigned"
           ? null
-          : String(form.get("assignee_id") || "") || null,
+          : requestedAssignee || null
+        : data.profile.id,
       priority: String(form.get("priority")) as TaskPriority,
       due_date: String(form.get("due_date") || "") || null,
       estimated_minutes: Number(form.get("estimated_minutes") || 0) || null,
@@ -679,6 +681,7 @@ export function Dashboard({ initialData }: { initialData: DashboardData }) {
       {dialog === "task" && (
         <TaskDialog
           data={data}
+          isManager={isManager}
           busy={busy}
           onClose={() => setDialog(null)}
           onSubmit={createTask}
@@ -1666,11 +1669,13 @@ function DialogShell({
 
 function TaskDialog({
   data,
+  isManager,
   busy,
   onClose,
   onSubmit,
 }: {
   data: DashboardData;
+  isManager: boolean;
   busy: boolean;
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
@@ -1679,10 +1684,17 @@ function TaskDialog({
   return (
     <DialogShell
       title={tr("Thêm công việc", "Create task")}
-      subtitle={tr(
-        "Tạo task và giao cho một thành viên.",
-        "Create a task and assign it to a teammate.",
-      )}
+      subtitle={
+        isManager
+          ? tr(
+              "Tạo task và giao cho một thành viên.",
+              "Create a task and assign it to a teammate.",
+            )
+          : tr(
+              "Task mới sẽ tự động giao cho bạn trong dự án bạn tham gia.",
+              "New tasks are assigned to you in projects you belong to.",
+            )
+      }
       onClose={onClose}
     >
       <form onSubmit={onSubmit} className="mt-6 space-y-4">
@@ -1722,18 +1734,30 @@ function TaskDialog({
           </label>
           <label className="text-sm font-semibold">
             {tr("Người thực hiện", "Assignee")}
-            <SelectField
-              name="assignee_id"
-              defaultValue="unassigned"
-              className="mt-2"
-              options={[
-                { value: "unassigned", label: tr("Chưa giao", "Unassigned") },
-                ...data.members.map((member) => ({
-                  value: member.id,
-                  label: member.full_name,
-                })),
-              ]}
-            />
+            {isManager ? (
+              <SelectField
+                name="assignee_id"
+                defaultValue="unassigned"
+                className="mt-2"
+                options={[
+                  {
+                    value: "unassigned",
+                    label: tr("Chưa giao", "Unassigned"),
+                  },
+                  ...data.members.map((member) => ({
+                    value: member.id,
+                    label: member.full_name,
+                  })),
+                ]}
+              />
+            ) : (
+              <div className="mt-2 flex h-10 items-center justify-between rounded-lg border border-[#dfe5e1] bg-[#f7f8f8] px-3">
+                <span className="text-sm font-medium">
+                  {data.profile.full_name}
+                </span>
+                <Badge variant="secondary">{tr("Chính bạn", "You")}</Badge>
+              </div>
+            )}
           </label>
           <label className="text-sm font-semibold">
             Sprint
@@ -1788,6 +1812,14 @@ function TaskDialog({
               : tr("Tạo công việc", "Create task")}
           </Button>
         </div>
+        {!data.projects.length && (
+          <p className="text-right text-xs text-[#a23b2b]">
+            {tr(
+              "Bạn chưa được thêm vào dự án nào. Hãy liên hệ PM.",
+              "You have not been added to a project yet. Contact your PM.",
+            )}
+          </p>
+        )}
       </form>
     </DialogShell>
   );

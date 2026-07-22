@@ -231,11 +231,9 @@ export function TaskWorkspace(props: Props) {
                 onClick={() => setWorkView("workflow")}
               />
             </div>
-            {isManager && (
-              <Button onClick={onCreateTask}>
-                <Plus size={17} /> {tr("Tạo task", "Create task")}
-              </Button>
-            )}
+            <Button onClick={onCreateTask}>
+              <Plus size={17} /> {tr("Tạo task", "Create task")}
+            </Button>
           </div>
         </div>
 
