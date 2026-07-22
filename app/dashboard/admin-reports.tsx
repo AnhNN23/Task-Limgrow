@@ -24,7 +24,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { cn, formatDuration, initials } from "@/lib/utils";
+import { cn, formatDuration, initials, runningSeconds } from "@/lib/utils";
 import type { DashboardData, Role, TaskStatus, TimeEntry } from "@/lib/types";
 import { useI18n } from "@/lib/i18n";
 
@@ -65,12 +65,7 @@ const statusInfo: Record<
 function entrySeconds(entry: TimeEntry, now: number) {
   return (
     entry.duration_seconds +
-    (!entry.ended_at
-      ? Math.max(
-          0,
-          Math.floor((now - new Date(entry.started_at).getTime()) / 1000),
-        )
-      : 0)
+    (!entry.ended_at ? runningSeconds(entry.started_at, now) : 0)
   );
 }
 

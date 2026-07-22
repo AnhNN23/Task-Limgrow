@@ -8,6 +8,7 @@ import {
   Check,
   ChevronDown,
   Circle,
+  CircleStop,
   Clock3,
   Columns3,
   Download,
@@ -34,7 +35,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { cn, formatDuration, initials } from "@/lib/utils";
+import { cn, formatDuration, initials, runningSeconds } from "@/lib/utils";
 import { createClient } from "@/utils/supabase/client";
 import { useToast } from "@/components/ui/toast";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -291,7 +292,7 @@ export function TaskWorkspace(props: Props) {
             </button>
           )}
           <span className="ml-auto text-xs text-[#8a938f]">
-            {tr("Cập nhật theo thời gian thực", "Real-time updates")}
+            {tr("Cập nhật sau mỗi thao tác", "Updated after each action")}
           </span>
         </div>
 
@@ -318,14 +319,22 @@ export function TaskWorkspace(props: Props) {
           />
         )}
         {workView === "calendar" && (
-          <CalendarView data={data} tasks={tasks} onOpen={setSelectedTaskId} />
+          <CalendarView
+            data={data}
+            tasks={tasks}
+            activeEntry={activeEntry}
+            onOpen={setSelectedTaskId}
+            onTimer={onToggleTimer}
+          />
         )}
         {workView === "backlog" && (
           <BacklogView
             data={data}
             tasks={tasks}
+            activeEntry={activeEntry}
             isManager={isManager}
             onOpen={setSelectedTaskId}
+            onTimer={onToggleTimer}
             onDataChange={onDataChange}
             onError={onError}
           />
@@ -573,8 +582,12 @@ function TaskRow({
                 : "text-[#66716c] hover:bg-[#e8f5f0] hover:text-[#130b5c]",
             )}
           >
-            <Play size={12} fill="currentColor" />
-            {running ? "Đang chạy" : formatDuration(seconds).slice(0, 5)}
+            {running ? (
+              <CircleStop size={12} />
+            ) : (
+              <Play size={12} fill="currentColor" />
+            )}
+            {formatDuration(seconds)}
           </button>
           {estimateSeconds > 0 && (
             <>
@@ -716,12 +729,12 @@ function BoardView({
                           running ? "text-[#c54141]" : "text-[#78827d]",
                         )}
                       >
-                        <Timer size={13} />
-                        {running
-                          ? "Đang chạy"
-                          : formatDuration(
-                              taskSeconds(task.id, data.timeEntries),
-                            ).slice(0, 5)}
+                        {running ? (
+                          <CircleStop size={13} />
+                        ) : (
+                          <Play size={13} />
+                        )}
+                        {formatDuration(taskSeconds(task.id, data.timeEntries))}
                       </button>
                       <div className="ml-auto flex items-center gap-2">
                         {task.due_date && (
@@ -751,11 +764,15 @@ function BoardView({
 function CalendarView({
   data,
   tasks,
+  activeEntry,
   onOpen,
+  onTimer,
 }: {
   data: DashboardData;
   tasks: Task[];
+  activeEntry?: TimeEntry;
   onOpen: (id: string) => void;
+  onTimer: (task: Task) => void;
 }) {
   const [monthOffset, setMonthOffset] = useState(0);
   const base = new Date();
@@ -817,18 +834,37 @@ function CalendarView({
               </span>
               <div className="mt-1 space-y-1">
                 {dayTasks.slice(0, 3).map((task) => (
-                  <button
-                    onClick={() => onOpen(task.id)}
+                  <div
                     key={task.id}
-                    className="block w-full truncate rounded px-2 py-1 text-left text-[10px] font-semibold text-white"
+                    className="flex w-full items-center gap-1 rounded px-1 py-1 text-[10px] font-semibold text-white"
                     style={{
                       background: data.projects.find(
                         (project) => project.id === task.project_id,
                       )?.color,
                     }}
                   >
-                    {task.title}
-                  </button>
+                    <button
+                      onClick={() => onTimer(task)}
+                      className="grid size-5 shrink-0 place-items-center rounded bg-black/15 hover:bg-black/25"
+                      aria-label={
+                        activeEntry?.task_id === task.id
+                          ? "Stop timer"
+                          : "Start timer"
+                      }
+                    >
+                      {activeEntry?.task_id === task.id ? (
+                        <CircleStop size={11} />
+                      ) : (
+                        <Play size={11} fill="currentColor" />
+                      )}
+                    </button>
+                    <button
+                      onClick={() => onOpen(task.id)}
+                      className="min-w-0 flex-1 truncate text-left"
+                    >
+                      {task.title}
+                    </button>
+                  </div>
                 ))}
                 {dayTasks.length > 3 && (
                   <span className="text-[10px] text-[#7c8580]">
@@ -847,15 +883,19 @@ function CalendarView({
 function BacklogView({
   data,
   tasks,
+  activeEntry,
   isManager,
   onOpen,
+  onTimer,
   onDataChange,
   onError,
 }: {
   data: DashboardData;
   tasks: Task[];
+  activeEntry?: TimeEntry;
   isManager: boolean;
   onOpen: (id: string) => void;
+  onTimer: (task: Task) => void;
   onDataChange: Props["onDataChange"];
   onError: (message: string) => void;
 }) {
@@ -1063,15 +1103,36 @@ function BacklogView({
             </div>
             {group.tasks.length ? (
               group.tasks.map((task) => (
-                <button
-                  onClick={() => onOpen(task.id)}
+                <div
                   key={task.id}
                   className="flex w-full items-center gap-3 border-b border-[#edf0ee] px-4 py-3 text-left last:border-0 hover:bg-[#fafcfa]"
                 >
-                  <Circle size={16} className="text-[#a1a8a4]" />
-                  <span className="flex-1 text-sm font-semibold">
+                  <button
+                    onClick={() => onTimer(task)}
+                    className={cn(
+                      "grid size-8 shrink-0 place-items-center rounded-full border",
+                      activeEntry?.task_id === task.id
+                        ? "border-[#c54141] bg-[#fff0ed] text-[#c54141]"
+                        : "border-[#d7ddda] text-[#130b5c] hover:bg-[#eeecff]",
+                    )}
+                    aria-label={
+                      activeEntry?.task_id === task.id
+                        ? "Stop timer"
+                        : "Start timer"
+                    }
+                  >
+                    {activeEntry?.task_id === task.id ? (
+                      <CircleStop size={14} />
+                    ) : (
+                      <Play size={14} fill="currentColor" />
+                    )}
+                  </button>
+                  <button
+                    onClick={() => onOpen(task.id)}
+                    className="flex-1 text-left text-sm font-semibold"
+                  >
                     {task.title}
-                  </span>
+                  </button>
                   <span
                     className={cn(
                       "text-xs font-semibold",
@@ -1085,7 +1146,10 @@ function BacklogView({
                       {task.estimated_minutes}m
                     </span>
                   )}
-                </button>
+                  <span className="font-mono text-xs text-[#59645f]">
+                    {formatDuration(taskSeconds(task.id, data.timeEntries))}
+                  </span>
+                </div>
               ))
             ) : (
               <div className="p-6 text-center text-xs text-[#929a96]">
@@ -1603,8 +1667,14 @@ function TaskDrawer({
               size="sm"
               onClick={() => onTimer(task)}
             >
-              <Play size={14} fill="currentColor" />
-              {running ? "Dừng timer" : "Bấm giờ"}
+              {running ? (
+                <CircleStop size={14} />
+              ) : (
+                <Play size={14} fill="currentColor" />
+              )}
+              {running
+                ? tr("Dừng timer", "Stop timer")
+                : tr("Bắt đầu", "Start")}
             </Button>
             {isManager && (
               <Button
@@ -2185,9 +2255,9 @@ function TaskDrawer({
                   />
                 </div>
                 <p className="mt-2 text-[10px] text-[#7e8983]">
-                  {formatDuration(loggedSeconds).slice(0, 5)} /{" "}
+                  {formatDuration(loggedSeconds)} /{" "}
                   {estimateSeconds
-                    ? formatDuration(estimateSeconds).slice(0, 5)
+                    ? formatDuration(estimateSeconds)
                     : tr("chưa estimate", "not estimated")}
                 </p>
               </div>
@@ -2539,9 +2609,16 @@ function EmptyTasks() {
   );
 }
 function taskSeconds(taskId: string, entries: TimeEntry[]) {
+  const now = Date.now();
   return entries
     .filter((entry) => entry.task_id === taskId)
-    .reduce((sum, entry) => sum + entry.duration_seconds, 0);
+    .reduce(
+      (sum, entry) =>
+        sum +
+        entry.duration_seconds +
+        (entry.ended_at ? 0 : runningSeconds(entry.started_at, now)),
+      0,
+    );
 }
 function taskLabels(taskId: string, data: DashboardData): Label[] {
   const ids = data.taskLabels

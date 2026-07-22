@@ -5,7 +5,10 @@ import { useRouter } from "next/navigation";
 import { Eye, EyeOff, Loader2, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { createClient } from "@/utils/supabase/client";
+import {
+  clearSupabaseAuthCookies,
+  createClient,
+} from "@/utils/supabase/client";
 import { useToast } from "@/components/ui/toast";
 import { LanguageSwitcher, useI18n } from "@/lib/i18n";
 
@@ -24,6 +27,7 @@ export function AuthForm() {
     const form = new FormData(event.currentTarget);
     const email = String(form.get("email") ?? "").trim();
     const password = String(form.get("password") ?? "");
+    clearSupabaseAuthCookies();
     const result = await createClient().auth.signInWithPassword({
       email,
       password,
@@ -52,7 +56,6 @@ export function AuthForm() {
       variant: "success",
     });
     router.replace("/dashboard");
-    router.refresh();
   }
 
   return (

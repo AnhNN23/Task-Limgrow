@@ -47,7 +47,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { createClient } from "@/utils/supabase/client";
-import { cn, formatDuration, initials } from "@/lib/utils";
+import { cn, formatDuration, initials, runningSeconds } from "@/lib/utils";
 import type {
   DashboardData,
   Profile,
@@ -60,7 +60,12 @@ import type {
 } from "@/lib/types";
 import { TaskWorkspace } from "./task-workspace";
 import { useToast } from "@/components/ui/toast";
-import { createEmployee, deleteEmployee, updateEmployee } from "./actions";
+import {
+  createEmployee,
+  deleteEmployee,
+  stopTimer,
+  updateEmployee,
+} from "./actions";
 import { ProductGuide } from "@/components/product-guide";
 import { AdminReports } from "./admin-reports";
 import { ActivityTracking } from "./activity-tracking";
@@ -105,6 +110,7 @@ const roleLabels = {
   graphic_designer: "Graphic Designer",
   developer: "Developer",
 } as const;
+const TIMER_REFRESH_MS = 250;
 
 export function Dashboard({ initialData }: { initialData: DashboardData }) {
   const router = useRouter();
@@ -133,16 +139,14 @@ export function Dashboard({ initialData }: { initialData: DashboardData }) {
     if (!activeEntry) return;
     const tick = () => setNow(Date.now());
     tick();
-    const timer = window.setInterval(tick, 1000);
+    const timer = window.setInterval(tick, TIMER_REFRESH_MS);
     return () => window.clearInterval(timer);
   }, [activeEntry]);
 
   const todayKey = new Date().toDateString();
   const todaySeconds = data.timeEntries.reduce((sum, entry) => {
     if (new Date(entry.started_at).toDateString() !== todayKey) return sum;
-    const running = entry.ended_at
-      ? 0
-      : Math.floor((now - new Date(entry.started_at).getTime()) / 1000);
+    const running = entry.ended_at ? 0 : runningSeconds(entry.started_at, now);
     return sum + entry.duration_seconds + running;
   }, 0);
   const weekSeconds = data.timeEntries.reduce((sum, entry) => {
@@ -150,9 +154,7 @@ export function Dashboard({ initialData }: { initialData: DashboardData }) {
     return daysAgo <= 7
       ? sum +
           entry.duration_seconds +
-          (!entry.ended_at
-            ? Math.floor((now - new Date(entry.started_at).getTime()) / 1000)
-            : 0)
+          (!entry.ended_at ? runningSeconds(entry.started_at, now) : 0)
       : sum;
   }, 0);
   const filteredTasks = useMemo(
@@ -185,36 +187,38 @@ export function Dashboard({ initialData }: { initialData: DashboardData }) {
     setError(null);
     const supabase = createClient();
     if (activeEntry) {
-      const endedAt = new Date().toISOString();
-      const duration = Math.max(
-        1,
-        Math.floor(
-          (Date.now() - new Date(activeEntry.started_at).getTime()) / 1000,
-        ),
-      );
-      const { error: stopError } = await supabase
-        .from("time_entries")
-        .update({ ended_at: endedAt, duration_seconds: duration })
-        .eq("id", activeEntry.id);
-      if (stopError) reportError(stopError.message);
-      else {
-        setData((current) => ({
-          ...current,
-          timeEntries: current.timeEntries.map((entry) =>
-            entry.id === activeEntry.id
-              ? { ...entry, ended_at: endedAt, duration_seconds: duration }
-              : entry,
-          ),
-        }));
-        toast({
-          title: tr("Đã dừng bấm giờ", "Timer stopped"),
-          description: tr(
-            `Đã ghi ${formatDuration(duration)} cho task.`,
-            `${formatDuration(duration)} logged for this task.`,
-          ),
-          variant: "success",
-        });
+      const result = await stopTimer(activeEntry.id);
+      if (!result.ok) {
+        reportError(result.message);
+        setBusy(false);
+        return;
       }
+
+      const savedEntry = result.entry;
+      const updatedEntries = data.timeEntries.map((entry) =>
+        entry.id === activeEntry.id ? savedEntry : entry,
+      );
+      const taskTotalSeconds = updatedEntries
+        .filter(
+          (entry) =>
+            entry.task_id === savedEntry.task_id &&
+            entry.user_id === savedEntry.user_id,
+        )
+        .reduce((sum, entry) => sum + entry.duration_seconds, 0);
+      setData((current) => ({
+        ...current,
+        timeEntries: current.timeEntries.map((entry) =>
+          entry.id === activeEntry.id ? savedEntry : entry,
+        ),
+      }));
+      toast({
+        title: tr("Đã dừng bấm giờ", "Timer stopped"),
+        description: tr(
+          `Phiên này: ${formatDuration(savedEntry.duration_seconds)} · Tổng task: ${formatDuration(taskTotalSeconds)}.`,
+          `This session: ${formatDuration(savedEntry.duration_seconds)} · Task total: ${formatDuration(taskTotalSeconds)}.`,
+        ),
+        variant: "success",
+      });
     }
     if (!activeEntry || activeEntry.task_id !== task.id) {
       const { data: entry, error: startError } = await supabase
@@ -291,7 +295,9 @@ export function Dashboard({ initialData }: { initialData: DashboardData }) {
         : data.profile.id,
       priority: String(form.get("priority")) as TaskPriority,
       due_date: String(form.get("due_date") || "") || null,
-      estimated_minutes: Number(form.get("estimated_minutes") || 0) || null,
+      estimated_minutes:
+        Number(form.get("estimated_hours") || 0) * 60 +
+          Number(form.get("estimated_minutes_part") || 0) || null,
       created_by: data.profile.id,
       sprint_id:
         String(form.get("sprint_id") || "") === "backlog"
@@ -768,14 +774,26 @@ function Overview({
     (task) => task.id === activeEntry?.task_id,
   );
   const done = data.tasks.filter((task) => task.status === "done").length;
-  const activeElapsed = activeEntry
-    ? Math.max(
-        0,
-        Math.floor((now - new Date(activeEntry.started_at).getTime()) / 1000),
-      )
+  const activeSessionElapsed = activeEntry
+    ? runningSeconds(activeEntry.started_at, now)
     : 0;
-  const timerNeedsReview = activeElapsed >= 4 * 60 * 60;
-  const timerMayBeForgotten = activeElapsed >= 8 * 60 * 60;
+  const activeTaskElapsed = activeEntry
+    ? data.timeEntries
+        .filter(
+          (entry) =>
+            entry.task_id === activeEntry.task_id &&
+            entry.user_id === data.profile.id,
+        )
+        .reduce(
+          (sum, entry) =>
+            sum +
+            entry.duration_seconds +
+            (entry.ended_at ? 0 : runningSeconds(entry.started_at, now)),
+          0,
+        )
+    : 0;
+  const timerNeedsReview = activeSessionElapsed >= 4 * 60 * 60;
+  const timerMayBeForgotten = activeSessionElapsed >= 8 * 60 * 60;
   return (
     <>
       <div className="mb-7 flex items-end justify-between">
@@ -799,7 +817,7 @@ function Overview({
         <Stat
           icon={Timer}
           label={tr("Hôm nay", "Today")}
-          value={formatDuration(todaySeconds).slice(0, 5)}
+          value={formatDuration(todaySeconds)}
           note={tr("thời gian đã ghi", "time logged")}
           color="green"
         />
@@ -876,7 +894,7 @@ function Overview({
             </div>
           </div>
           <div className="font-mono text-2xl font-semibold">
-            {formatDuration(activeElapsed)}
+            {formatDuration(activeTaskElapsed)}
           </div>
           {timerNeedsReview && (
             <Button variant="outline" onClick={onViewTracking}>
@@ -1006,35 +1024,24 @@ function TaskTable({
           const isRunning = activeEntry?.task_id === task.id;
           const seconds = data.timeEntries
             .filter((entry) => entry.task_id === task.id)
-            .reduce((sum, entry) => sum + entry.duration_seconds, 0);
+            .reduce(
+              (sum, entry) =>
+                sum +
+                entry.duration_seconds +
+                (entry.ended_at ? 0 : runningSeconds(entry.started_at)),
+              0,
+            );
           return (
             <TableRow key={task.id}>
               <TableCell className="px-5 py-4">
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => onToggleTimer(task)}
-                    className={cn(
-                      "grid h-8 w-8 shrink-0 place-items-center rounded-full border transition",
-                      isRunning
-                        ? "border-[#c54141] bg-[#fff0ed] text-[#c54141]"
-                        : "border-[#cdd5d1] text-[#130b5c] hover:border-[#130b5c] hover:bg-[#eeeefe]",
-                    )}
-                  >
-                    {isRunning ? (
-                      <CircleStop size={14} />
-                    ) : (
-                      <Play size={14} fill="currentColor" />
-                    )}
-                  </button>
-                  <div>
-                    <p className="text-sm font-semibold">{task.title}</p>
-                    <p className="mt-1 text-xs text-[#89928e]">
-                      {member?.full_name ?? tr("Chưa giao", "Unassigned")}
-                      {task.due_date
-                        ? ` · ${new Date(task.due_date).toLocaleDateString(dateLocale)}`
-                        : ""}
-                    </p>
-                  </div>
+                <div>
+                  <p className="text-sm font-semibold">{task.title}</p>
+                  <p className="mt-1 text-xs text-[#89928e]">
+                    {member?.full_name ?? tr("Chưa giao", "Unassigned")}
+                    {task.due_date
+                      ? ` · ${new Date(task.due_date).toLocaleDateString(dateLocale)}`
+                      : ""}
+                  </p>
                 </div>
               </TableCell>
               <TableCell>
@@ -1086,8 +1093,35 @@ function TaskTable({
                   }))}
                 />
               </TableCell>
-              <TableCell className="px-5 text-right font-mono font-semibold text-[#59645f]">
-                {formatDuration(seconds).slice(0, 5)}
+              <TableCell className="px-5 text-right">
+                <button
+                  type="button"
+                  onClick={() => onToggleTimer(task)}
+                  aria-label={
+                    isRunning
+                      ? tr(
+                          `Dừng timer ${task.title}`,
+                          `Stop timer ${task.title}`,
+                        )
+                      : tr(
+                          `Bắt đầu timer ${task.title}`,
+                          `Start timer ${task.title}`,
+                        )
+                  }
+                  className={cn(
+                    "ml-auto inline-flex items-center gap-2 rounded-md px-2.5 py-1.5 font-mono text-xs font-semibold transition",
+                    isRunning
+                      ? "bg-[#ffebe8] text-[#c44343]"
+                      : "bg-[#e8f5f0] text-[#130b5c] hover:bg-[#dcefe8]",
+                  )}
+                >
+                  {isRunning ? (
+                    <CircleStop size={13} />
+                  ) : (
+                    <Play size={13} fill="currentColor" />
+                  )}
+                  {formatDuration(seconds)}
+                </button>
               </TableCell>
             </TableRow>
           );
@@ -1791,16 +1825,29 @@ function TaskDialog({
             {tr("Hạn hoàn thành", "Due date")}
             <DatePicker name="due_date" className="mt-2" />
           </label>
-          <label className="text-sm font-semibold">
-            {tr("Ước tính (phút)", "Estimate (minutes)")}
-            <Input
-              name="estimated_minutes"
-              type="number"
-              min="0"
-              placeholder="120"
-              className="mt-2"
-            />
-          </label>
+          <fieldset className="text-sm font-semibold">
+            <legend>{tr("Ước tính", "Estimate")}</legend>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <SelectField
+                name="estimated_hours"
+                defaultValue="0"
+                ariaLabel={tr("Số giờ ước tính", "Estimated hours")}
+                options={Array.from({ length: 25 }, (_, hour) => ({
+                  value: String(hour),
+                  label: tr(`${hour} giờ`, `${hour} hr`),
+                }))}
+              />
+              <SelectField
+                name="estimated_minutes_part"
+                defaultValue="0"
+                ariaLabel={tr("Số phút ước tính", "Estimated minutes")}
+                options={Array.from({ length: 60 }, (_, minute) => ({
+                  value: String(minute),
+                  label: tr(`${minute} phút`, `${minute} min`),
+                }))}
+              />
+            </div>
+          </fieldset>
         </div>
         <div className="flex justify-end gap-3 pt-3">
           <Button type="button" variant="outline" onClick={onClose}>

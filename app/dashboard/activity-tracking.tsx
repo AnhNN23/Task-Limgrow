@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-  type FormEvent,
-} from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   Activity,
   AlertTriangle,
@@ -30,9 +24,10 @@ import { Input } from "@/components/ui/input";
 import { SelectField } from "@/components/ui/select";
 import { useToast } from "@/components/ui/toast";
 import { useI18n } from "@/lib/i18n";
-import { cn, formatDuration, initials } from "@/lib/utils";
+import { cn, formatDuration, initials, runningSeconds } from "@/lib/utils";
 import type { DashboardData, Task, TimeEntry } from "@/lib/types";
 import { createClient } from "@/utils/supabase/client";
+import { stopTimer } from "./actions";
 
 type Props = {
   data: DashboardData;
@@ -49,6 +44,7 @@ type PendingAction =
 
 const LONG_TIMER_SECONDS = 4 * 60 * 60;
 const FORGOTTEN_TIMER_SECONDS = 8 * 60 * 60;
+const TIMER_REFRESH_MS = 250;
 
 function toDateTimeLocal(value: string | Date) {
   const date = value instanceof Date ? value : new Date(value);
@@ -65,12 +61,7 @@ function timerRisk(seconds: number) {
 function entrySeconds(entry: TimeEntry, now: number) {
   return (
     entry.duration_seconds +
-    (!entry.ended_at
-      ? Math.max(
-          0,
-          Math.floor((now - new Date(entry.started_at).getTime()) / 1000),
-        )
-      : 0)
+    (!entry.ended_at ? runningSeconds(entry.started_at, now) : 0)
   );
 }
 
@@ -144,9 +135,9 @@ export function ActivityTracking({
     (entry) => !entry.ended_at && entry.user_id === data.profile.id,
   );
   const [memberId, setMemberId] = useState(isManager ? "all" : data.profile.id);
-  const [selectedTaskId, setSelectedTaskId] = useState(
-    ownRunningEntry?.task_id ?? "none",
-  );
+  const [manualTaskId, setManualTaskId] = useState("none");
+  const [manualHours, setManualHours] = useState("0");
+  const [manualMinutes, setManualMinutes] = useState("0");
   const [range, setRange] = useState<Range>("all");
   const [busy, setBusy] = useState(false);
   const [now, setNow] = useState(() => Date.now());
@@ -160,11 +151,14 @@ export function ActivityTracking({
   );
 
   useEffect(() => {
-    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    const timer = window.setInterval(
+      () => setNow(Date.now()),
+      TIMER_REFRESH_MS,
+    );
     return () => window.clearInterval(timer);
   }, []);
 
-  const refreshEntries = useCallback(async () => {
+  async function refreshEntries() {
     const { data: entries, error } = await createClient()
       .from("time_entries")
       .select("*")
@@ -175,46 +169,20 @@ export function ActivityTracking({
       ...current,
       timeEntries: (entries as TimeEntry[] | null) ?? [],
     }));
-  }, [onDataChange]);
-
-  useEffect(() => {
-    const supabase = createClient();
-    const channel = supabase
-      .channel(`web-time-tracking-${data.profile.id}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "time_entries" },
-        refreshEntries,
-      )
-      .subscribe();
-    return () => {
-      void supabase.removeChannel(channel);
-    };
-  }, [data.profile.id, refreshEntries]);
+  }
 
   async function stopEntry(entry: TimeEntry) {
     setBusy(true);
-    const endedAt = new Date().toISOString();
-    const duration = Math.max(
-      1,
-      Math.floor((Date.now() - new Date(entry.started_at).getTime()) / 1000),
-    );
-    const { error } = await createClient()
-      .from("time_entries")
-      .update({ ended_at: endedAt, duration_seconds: duration })
-      .eq("id", entry.id)
-      .eq("user_id", data.profile.id);
+    const result = await stopTimer(entry.id);
     setBusy(false);
-    if (error) {
-      onError(error.message);
+    if (!result.ok) {
+      onError(result.message);
       return false;
     }
     onDataChange((current) => ({
       ...current,
       timeEntries: current.timeEntries.map((item) =>
-        item.id === entry.id
-          ? { ...item, ended_at: endedAt, duration_seconds: duration }
-          : item,
+        item.id === entry.id ? result.entry : item,
       ),
     }));
     return true;
@@ -263,23 +231,73 @@ export function ActivityTracking({
     return true;
   }
 
-  async function startOrSwitch() {
-    if (selectedTaskId === "none") {
-      onError(
-        tr("Chọn task trước khi bắt đầu.", "Choose a task before starting."),
-      );
-      return;
-    }
+  async function startOrSwitch(taskId: string) {
     if (ownRunningEntry) {
-      if (ownRunningEntry.task_id === selectedTaskId) return;
+      if (ownRunningEntry.task_id === taskId) {
+        setPendingAction({ type: "stop", entry: ownRunningEntry });
+        return;
+      }
       setPendingAction({
         type: "switch",
         entry: ownRunningEntry,
-        taskId: selectedTaskId,
+        taskId,
       });
       return;
     }
-    await startEntry(selectedTaskId);
+    await startEntry(taskId);
+  }
+
+  async function logManualTime(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const durationSeconds =
+      Number(manualHours) * 3600 + Number(manualMinutes) * 60;
+    if (manualTaskId === "none") {
+      onError(tr("Hãy chọn task cần log.", "Choose a task to log."));
+      return;
+    }
+    if (durationSeconds <= 0) {
+      onError(
+        tr(
+          "Thời gian log phải lớn hơn 0 phút.",
+          "Logged time must be greater than 0 minutes.",
+        ),
+      );
+      return;
+    }
+    const endedAt = new Date();
+    const startedAt = new Date(endedAt.getTime() - durationSeconds * 1000);
+    setBusy(true);
+    const { data: entry, error } = await createClient()
+      .from("time_entries")
+      .insert({
+        task_id: manualTaskId,
+        user_id: data.profile.id,
+        started_at: startedAt.toISOString(),
+        ended_at: endedAt.toISOString(),
+        duration_seconds: durationSeconds,
+        note: tr("Log thủ công", "Manual time log"),
+      })
+      .select()
+      .single();
+    setBusy(false);
+    if (error || !entry) {
+      onError(
+        error?.message ?? tr("Không thể log giờ.", "Unable to log time."),
+      );
+      return;
+    }
+    onDataChange((current) => ({
+      ...current,
+      timeEntries: [entry as TimeEntry, ...current.timeEntries],
+    }));
+    const task = data.tasks.find((item) => item.id === manualTaskId);
+    toast({
+      title: tr("Đã log thời gian", "Time logged"),
+      description: `${task?.title ?? "Task"} · ${formatDuration(durationSeconds)}`,
+      variant: "success",
+    });
+    setManualHours("0");
+    setManualMinutes("0");
   }
 
   async function saveCorrection(event: FormEvent<HTMLFormElement>) {
@@ -421,9 +439,19 @@ export function ActivityTracking({
     0,
   );
   const activeTimers = visibleEntries.filter((entry) => !entry.ended_at);
-  const selectedTask = data.tasks.find((task) => task.id === selectedTaskId);
-  const ownElapsed = ownRunningEntry ? entrySeconds(ownRunningEntry, now) : 0;
-  const ownTimerRisk = timerRisk(ownElapsed);
+  const ownSessionElapsed = ownRunningEntry
+    ? entrySeconds(ownRunningEntry, now)
+    : 0;
+  const ownTaskElapsed = ownRunningEntry
+    ? data.timeEntries
+        .filter(
+          (entry) =>
+            entry.task_id === ownRunningEntry.task_id &&
+            entry.user_id === data.profile.id,
+        )
+        .reduce((sum, entry) => sum + entrySeconds(entry, now), 0)
+    : 0;
+  const ownTimerRisk = timerRisk(ownSessionElapsed);
 
   return (
     <section className="space-y-5">
@@ -554,7 +582,7 @@ export function ActivityTracking({
                     )}
                   </div>
                   <p className="font-mono text-3xl font-bold tabular-nums text-[#17694c]">
-                    {formatDuration(ownElapsed)}
+                    {formatDuration(ownTaskElapsed)}
                   </p>
                 </div>
               </div>
@@ -581,54 +609,105 @@ export function ActivityTracking({
               </div>
             )}
 
-            <label className="mb-2 block text-xs font-bold text-[#56615c]">
-              {tr("Task đang làm", "Task in progress")}
-            </label>
-            <SelectField
-              value={selectedTaskId}
-              onValueChange={setSelectedTaskId}
-              disabled={busy}
-              options={[
-                { value: "none", label: tr("Chọn một task", "Choose a task") },
-                ...ownTasks.map((task) => ({
-                  value: task.id,
-                  label: task.title,
-                })),
-              ]}
-            />
-
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-              <p className="text-xs text-[#7a8580]">
-                {selectedTask?.estimated_minutes
-                  ? `${tr("Estimate", "Estimate")}: ${formatDuration(selectedTask.estimated_minutes * 60)}`
-                  : tr(
-                      "Task này chưa có estimate.",
-                      "This task has no estimate yet.",
+            <p className="mb-2 text-xs font-bold text-[#56615c]">
+              {tr("Chọn ngay trên task", "Start directly from a task")}
+            </p>
+            <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
+              {ownTasks.map((task) => {
+                const running = ownRunningEntry?.task_id === task.id;
+                const total = taskLoggedSeconds(task.id, data.timeEntries, now);
+                return (
+                  <div
+                    key={task.id}
+                    className={cn(
+                      "flex items-center gap-3 rounded-lg border p-3",
+                      running
+                        ? "border-[#b9e4d1] bg-[#f4fcf8]"
+                        : "border-[#e2e7e4] bg-white",
                     )}
-              </p>
-              {ownRunningEntry && ownRunningEntry.task_id === selectedTaskId ? (
-                <Button
-                  variant="danger"
-                  disabled={busy}
-                  onClick={() =>
-                    setPendingAction({ type: "stop", entry: ownRunningEntry })
-                  }
-                >
-                  <CircleStop size={16} />
-                  {tr("Dừng & lưu actual", "Stop & save actual")}
-                </Button>
-              ) : (
-                <Button
-                  disabled={busy || selectedTaskId === "none"}
-                  onClick={startOrSwitch}
-                >
-                  <Play size={16} fill="currentColor" />
-                  {ownRunningEntry
-                    ? tr("Chuyển sang task này", "Switch to this task")
-                    : tr("Bắt đầu bấm giờ", "Start timer")}
-                </Button>
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold">
+                        {task.title}
+                      </p>
+                      <p className="mt-1 font-mono text-xs text-[#69736e]">
+                        {formatDuration(total)}
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={running ? "danger" : "outline"}
+                      disabled={busy}
+                      onClick={() => void startOrSwitch(task.id)}
+                    >
+                      {running ? (
+                        <CircleStop size={15} />
+                      ) : (
+                        <Play size={15} fill="currentColor" />
+                      )}
+                      {running
+                        ? tr("Dừng", "Stop")
+                        : ownRunningEntry
+                          ? tr("Chuyển", "Switch")
+                          : tr("Bắt đầu", "Start")}
+                    </Button>
+                  </div>
+                );
+              })}
+              {!ownTasks.length && (
+                <p className="rounded-lg border border-dashed p-5 text-center text-xs text-[#89938e]">
+                  {tr("Không có task đang mở.", "No open tasks.")}
+                </p>
               )}
             </div>
+
+            <form
+              onSubmit={logManualTime}
+              className="mt-5 border-t border-[#e6eae8] pt-5"
+            >
+              <p className="text-xs font-bold text-[#56615c]">
+                {tr("Log thời gian thủ công", "Log time manually")}
+              </p>
+              <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,1fr)_110px_110px_auto]">
+                <SelectField
+                  value={manualTaskId}
+                  onValueChange={setManualTaskId}
+                  disabled={busy}
+                  ariaLabel={tr("Task cần log", "Task to log")}
+                  options={[
+                    { value: "none", label: tr("Chọn task", "Choose task") },
+                    ...ownTasks.map((task) => ({
+                      value: task.id,
+                      label: task.title,
+                    })),
+                  ]}
+                />
+                <SelectField
+                  value={manualHours}
+                  onValueChange={setManualHours}
+                  disabled={busy}
+                  ariaLabel={tr("Số giờ", "Hours")}
+                  options={Array.from({ length: 25 }, (_, hour) => ({
+                    value: String(hour),
+                    label: tr(`${hour} giờ`, `${hour} hr`),
+                  }))}
+                />
+                <SelectField
+                  value={manualMinutes}
+                  onValueChange={setManualMinutes}
+                  disabled={busy}
+                  ariaLabel={tr("Số phút", "Minutes")}
+                  options={Array.from({ length: 60 }, (_, minute) => ({
+                    value: String(minute),
+                    label: tr(`${minute} phút`, `${minute} min`),
+                  }))}
+                />
+                <Button type="submit" disabled={busy}>
+                  <Clock3 size={15} /> {tr("Log", "Log")}
+                </Button>
+              </div>
+            </form>
           </div>
         </Card>
 
