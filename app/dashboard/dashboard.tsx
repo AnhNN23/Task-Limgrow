@@ -1691,8 +1691,8 @@ function TaskDialog({
               "Create a task and assign it to a teammate.",
             )
           : tr(
-              "Task mới sẽ tự động giao cho bạn trong dự án bạn tham gia.",
-              "New tasks are assigned to you in projects you belong to.",
+              "Chọn bất kỳ dự án nào; task mới sẽ tự động giao cho bạn.",
+              "Choose any project; the new task will be assigned to you.",
             )
       }
       onClose={onClose}
@@ -1815,8 +1815,8 @@ function TaskDialog({
         {!data.projects.length && (
           <p className="text-right text-xs text-[#a23b2b]">
             {tr(
-              "Bạn chưa được thêm vào dự án nào. Hãy liên hệ PM.",
-              "You have not been added to a project yet. Contact your PM.",
+              "Hiện chưa có dự án nào để tạo task.",
+              "There are no projects available for a new task yet.",
             )}
           </p>
         )}

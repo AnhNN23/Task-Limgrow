@@ -227,11 +227,11 @@ alter table public.task_attachments enable row level security;
 alter table public.activity_logs enable row level security;
 
 drop policy if exists "Members view sprints" on public.sprints;
-create policy "Members view sprints" on public.sprints for select to authenticated using (public.is_project_manager() or public.is_project_member(project_id));
+create policy "Members view sprints" on public.sprints for select to authenticated using (true);
 drop policy if exists "PM manages sprints" on public.sprints;
 create policy "PM manages sprints" on public.sprints for all to authenticated using (public.is_project_manager()) with check (public.is_project_manager());
 drop policy if exists "Members view labels" on public.labels;
-create policy "Members view labels" on public.labels for select to authenticated using (public.is_project_manager() or public.is_project_member(project_id));
+create policy "Members view labels" on public.labels for select to authenticated using (true);
 drop policy if exists "PM manages labels" on public.labels;
 create policy "PM manages labels" on public.labels for all to authenticated using (public.is_project_manager()) with check (public.is_project_manager());
 drop policy if exists "Members view task labels" on public.task_labels;
@@ -288,7 +288,7 @@ drop policy if exists "Users can update self or PM updates all" on public.profil
 create policy "Users can update self or PM updates all" on public.profiles for update to authenticated using (id = auth.uid() or public.is_project_manager()) with check (id = auth.uid() or public.is_project_manager());
 
 drop policy if exists "Users can view available projects" on public.projects;
-create policy "Users can view available projects" on public.projects for select to authenticated using (public.is_project_manager() or public.is_project_member(id));
+create policy "Users can view available projects" on public.projects for select to authenticated using (true);
 drop policy if exists "PM manages projects" on public.projects;
 create policy "PM manages projects" on public.projects for all to authenticated using (public.is_project_manager()) with check (public.is_project_manager());
 
@@ -298,14 +298,13 @@ drop policy if exists "PM manages project memberships" on public.project_members
 create policy "PM manages project memberships" on public.project_members for all to authenticated using (public.is_project_manager()) with check (public.is_project_manager());
 
 drop policy if exists "Users view available tasks" on public.tasks;
-create policy "Users view available tasks" on public.tasks for select to authenticated using (public.is_project_manager() or assignee_id = auth.uid() or public.is_project_member(project_id));
+create policy "Users view available tasks" on public.tasks for select to authenticated using (public.is_project_manager() or assignee_id = auth.uid());
 drop policy if exists "PM creates tasks" on public.tasks;
 create policy "PM creates tasks" on public.tasks for insert to authenticated with check (
   public.is_project_manager()
   or (
     created_by = auth.uid()
     and assignee_id = auth.uid()
-    and public.is_project_member(project_id)
   )
 );
 drop policy if exists "PM or assignee updates tasks" on public.tasks;
