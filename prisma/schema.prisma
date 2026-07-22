@@ -1,0 +1,234 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum AppRole {
+  project_manager
+  tester
+  business_analyst
+  ui_ux
+  graphic_designer
+  developer
+
+  @@map("app_role")
+}
+
+enum TaskStatus {
+  todo
+  in_progress
+  review
+  done
+
+  @@map("task_status")
+}
+
+enum TaskPriority {
+  low
+  medium
+  high
+
+  @@map("task_priority")
+}
+
+model Profile {
+  id                String              @id @db.Uuid
+  full_name         String              @default("")
+  email             String              @default("")
+  role              AppRole             @default(developer)
+  avatar_url        String?
+  created_at        DateTime            @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime            @default(now()) @db.Timestamptz(6)
+  projects_created  Project[]           @relation("ProjectCreator")
+  project_members   ProjectMember[]
+  tasks_assigned    Task[]              @relation("TaskAssignee")
+  tasks_created     Task[]              @relation("TaskCreator")
+  time_entries      TimeEntry[]
+  sprints_created   Sprint[]            @relation("SprintCreator")
+  checklist_created TaskChecklistItem[] @relation("ChecklistCreator")
+  comments          TaskComment[]
+  attachments       TaskAttachment[]
+  activities        ActivityLog[]
+
+  @@map("profiles")
+}
+
+model Project {
+  id           String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name         String
+  client_name  String?
+  color        String          @default("#116149")
+  status       String          @default("active")
+  budget_hours Decimal?        @db.Decimal(10, 2)
+  created_by   String          @db.Uuid
+  created_at   DateTime        @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime        @default(now()) @db.Timestamptz(6)
+  creator      Profile         @relation("ProjectCreator", fields: [created_by], references: [id])
+  members      ProjectMember[]
+  tasks        Task[]
+  sprints      Sprint[]
+  labels       Label[]
+
+  @@map("projects")
+}
+
+model ProjectMember {
+  project_id String   @db.Uuid
+  user_id    String   @db.Uuid
+  joined_at  DateTime @default(now()) @db.Timestamptz(6)
+  project    Project  @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  user       Profile  @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@id([project_id, user_id])
+  @@map("project_members")
+}
+
+model Task {
+  id                String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  project_id        String              @db.Uuid
+  title             String
+  description       String?
+  status            TaskStatus          @default(todo)
+  priority          TaskPriority        @default(medium)
+  assignee_id       String?             @db.Uuid
+  due_date          DateTime?           @db.Date
+  estimated_minutes Int?
+  created_by        String              @db.Uuid
+  created_at        DateTime            @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime            @default(now()) @db.Timestamptz(6)
+  sprint_id         String?             @db.Uuid
+  position          Int                 @default(0)
+  project           Project             @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  assignee          Profile?            @relation("TaskAssignee", fields: [assignee_id], references: [id], onDelete: SetNull)
+  creator           Profile             @relation("TaskCreator", fields: [created_by], references: [id])
+  sprint            Sprint?             @relation(fields: [sprint_id], references: [id], onDelete: SetNull)
+  time_entries      TimeEntry[]
+  task_labels       TaskLabel[]
+  checklist_items   TaskChecklistItem[]
+  comments          TaskComment[]
+  attachments       TaskAttachment[]
+  activities        ActivityLog[]
+
+  @@index([project_id], map: "tasks_project_id_idx")
+  @@index([assignee_id], map: "tasks_assignee_id_idx")
+  @@map("tasks")
+}
+
+model TimeEntry {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  task_id          String    @db.Uuid
+  user_id          String    @db.Uuid
+  started_at       DateTime  @default(now()) @db.Timestamptz(6)
+  ended_at         DateTime? @db.Timestamptz(6)
+  duration_seconds Int       @default(0)
+  note             String?
+  created_at       DateTime  @default(now()) @db.Timestamptz(6)
+  task             Task      @relation(fields: [task_id], references: [id], onDelete: Cascade)
+  user             Profile   @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([task_id], map: "time_entries_task_id_idx")
+  @@index([user_id, started_at(sort: Desc)], map: "time_entries_user_started_idx")
+  @@map("time_entries")
+}
+
+model Sprint {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  project_id String    @db.Uuid
+  name       String
+  goal       String?
+  start_date DateTime? @db.Date
+  end_date   DateTime? @db.Date
+  status     String    @default("planned")
+  created_by String    @db.Uuid
+  created_at DateTime  @default(now()) @db.Timestamptz(6)
+  project    Project   @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  creator    Profile   @relation("SprintCreator", fields: [created_by], references: [id])
+  tasks      Task[]
+
+  @@map("sprints")
+}
+
+model Label {
+  id          String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  project_id  String      @db.Uuid
+  name        String
+  color       String      @default("#6b7280")
+  created_at  DateTime    @default(now()) @db.Timestamptz(6)
+  project     Project     @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  task_labels TaskLabel[]
+
+  @@unique([project_id, name])
+  @@map("labels")
+}
+
+model TaskLabel {
+  task_id  String @db.Uuid
+  label_id String @db.Uuid
+  task     Task   @relation(fields: [task_id], references: [id], onDelete: Cascade)
+  label    Label  @relation(fields: [label_id], references: [id], onDelete: Cascade)
+
+  @@id([task_id, label_id])
+  @@map("task_labels")
+}
+
+model TaskChecklistItem {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  task_id      String   @db.Uuid
+  content      String
+  is_completed Boolean  @default(false)
+  position     Int      @default(0)
+  created_by   String   @db.Uuid
+  created_at   DateTime @default(now()) @db.Timestamptz(6)
+  task         Task     @relation(fields: [task_id], references: [id], onDelete: Cascade)
+  creator      Profile  @relation("ChecklistCreator", fields: [created_by], references: [id])
+
+  @@index([task_id, position], map: "checklist_task_idx")
+  @@map("task_checklist_items")
+}
+
+model TaskComment {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  task_id    String   @db.Uuid
+  user_id    String   @db.Uuid
+  content    String
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @default(now()) @db.Timestamptz(6)
+  task       Task     @relation(fields: [task_id], references: [id], onDelete: Cascade)
+  user       Profile  @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([task_id, created_at], map: "comments_task_idx")
+  @@map("task_comments")
+}
+
+model TaskAttachment {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  task_id     String   @db.Uuid
+  uploaded_by String   @db.Uuid
+  file_name   String
+  file_path   String
+  file_size   BigInt?
+  mime_type   String?
+  created_at  DateTime @default(now()) @db.Timestamptz(6)
+  task        Task     @relation(fields: [task_id], references: [id], onDelete: Cascade)
+  uploader    Profile  @relation(fields: [uploaded_by], references: [id])
+
+  @@map("task_attachments")
+}
+
+model ActivityLog {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  task_id    String?  @db.Uuid
+  user_id    String?  @db.Uuid
+  action     String
+  details    Json?
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  task       Task?    @relation(fields: [task_id], references: [id], onDelete: Cascade)
+  user       Profile? @relation(fields: [user_id], references: [id], onDelete: SetNull)
+
+  @@index([task_id, created_at(sort: Desc)], map: "activity_task_idx")
+  @@map("activity_logs")
+}
