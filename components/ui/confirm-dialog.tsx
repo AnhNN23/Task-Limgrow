@@ -45,7 +45,7 @@ export function ConfirmDialog({
             >
               {title}
             </h2>
-            <p className="mt-2 text-sm leading-6 text-[#5e6c84]">
+            <p className="mt-2 break-words text-sm leading-6 text-[#5e6c84] [overflow-wrap:anywhere]">
               {description}
             </p>
           </div>

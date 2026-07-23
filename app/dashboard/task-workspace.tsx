@@ -1651,17 +1651,22 @@ function TaskDrawer({
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <aside className="flex h-full w-full max-w-[900px] flex-col bg-white shadow-2xl">
-        <header className="flex h-16 shrink-0 items-center gap-3 border-b border-[#e3e7e5] px-5">
-          <span className="flex items-center gap-2 text-xs font-semibold text-[#7b8580]">
+      <aside className="flex h-full w-full max-w-[900px] min-w-0 flex-col overflow-hidden bg-white shadow-2xl">
+        <header className="flex min-h-16 shrink-0 items-center gap-3 border-b border-[#e3e7e5] px-4 py-2 sm:px-5">
+          <span className="flex min-w-0 flex-1 items-center gap-2 text-xs font-semibold text-[#7b8580]">
             <i
-              className="h-2.5 w-2.5 rounded-full"
+              className="h-2.5 w-2.5 shrink-0 rounded-full"
               style={{ background: project?.color }}
             />
-            {project?.name}
-            <span>/</span>#{task.id.slice(0, 6).toUpperCase()}
+            <span className="min-w-0 truncate" title={project?.name}>
+              {project?.name}
+            </span>
+            <span className="shrink-0">/</span>
+            <span className="shrink-0">
+              #{task.id.slice(0, 6).toUpperCase()}
+            </span>
           </span>
-          <div className="ml-auto flex items-center gap-1">
+          <div className="ml-auto flex shrink-0 items-center gap-1">
             <Button
               variant={running ? "danger" : "outline"}
               size="sm"
@@ -1696,9 +1701,9 @@ function TaskDrawer({
             </Button>
           </div>
         </header>
-        <div className="grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-[1fr_280px]">
-          <main className="p-6 lg:p-8">
-            <div className="flex items-start gap-3">
+        <div className="grid min-h-0 min-w-0 flex-1 grid-cols-1 overflow-x-hidden overflow-y-auto lg:grid-cols-[minmax(0,1fr)_minmax(0,280px)]">
+          <main className="min-w-0 p-4 sm:p-6 lg:p-8">
+            <div className="flex min-w-0 items-start gap-3">
               <button
                 aria-label={
                   task.status === "done"
@@ -1717,17 +1722,18 @@ function TaskDrawer({
               >
                 <Check size={14} />
               </button>
-              <input
+              <textarea
                 aria-label="Tên task"
                 defaultValue={task.title}
+                rows={1}
                 onBlur={(event) =>
                   event.target.value !== task.title &&
                   updateTask({ title: event.target.value })
                 }
-                className="w-full border-0 bg-transparent text-2xl font-bold tracking-tight outline-none"
+                className="min-h-9 min-w-0 flex-1 resize-none overflow-hidden border-0 bg-transparent text-2xl font-bold leading-tight tracking-tight outline-none [field-sizing:content] [overflow-wrap:anywhere]"
               />
             </div>
-            <div className="ml-0 mt-6 sm:ml-9">
+            <div className="min-w-0 ml-0 mt-6 sm:ml-9">
               <SectionTitle
                 icon={AlignLeft}
                 title="Mô tả"
@@ -1741,7 +1747,7 @@ function TaskDrawer({
                     defaultValue={task.description ?? ""}
                     rows={6}
                     autoFocus
-                    className="w-full rounded-lg border border-[#cfd7d3] p-3 text-sm leading-6 outline-none focus:border-[#130b5c]"
+                    className="w-full max-w-full resize-y rounded-lg border border-[#cfd7d3] p-3 text-sm leading-6 outline-none [overflow-wrap:anywhere] focus:border-[#130b5c]"
                   />
                   <Button type="submit" size="sm" className="mt-2">
                     Lưu mô tả
@@ -1750,7 +1756,7 @@ function TaskDrawer({
               ) : (
                 <p
                   onClick={() => setEditingDescription(true)}
-                  className="mt-3 min-h-20 cursor-text whitespace-pre-wrap rounded-lg border border-transparent p-3 text-sm leading-6 text-[#59645f] hover:border-[#e0e5e2] hover:bg-[#fafbfa]"
+                  className="mt-3 min-h-20 max-w-full cursor-text whitespace-pre-wrap break-words rounded-lg border border-transparent p-3 text-sm leading-6 text-[#59645f] [overflow-wrap:anywhere] hover:border-[#e0e5e2] hover:bg-[#fafbfa]"
                 >
                   {task.description ||
                     "Thêm mô tả chi tiết, acceptance criteria hoặc link thiết kế…"}
@@ -1793,7 +1799,7 @@ function TaskDrawer({
                             </span>
                             <span
                               className={cn(
-                                "truncate text-sm",
+                                "min-w-0 flex-1 whitespace-normal break-words text-sm [overflow-wrap:anywhere]",
                                 item.is_completed &&
                                   "text-[#8a938f] line-through",
                               )}
@@ -1851,11 +1857,11 @@ function TaskDrawer({
                         onClick={() => downloadFile(attachment)}
                         className="flex min-w-0 flex-1 items-center gap-3 p-1 text-left"
                       >
-                        <span className="grid h-9 w-9 place-items-center rounded-lg bg-[#edf3f0] text-[#130b5c]">
+                        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-[#edf3f0] text-[#130b5c]">
                           <FileText size={18} />
                         </span>
                         <span className="min-w-0 flex-1">
-                          <b className="block truncate text-sm">
+                          <b className="block whitespace-normal break-words text-sm [overflow-wrap:anywhere]">
                             {attachment.file_name}
                           </b>
                           <small className="text-[#89928e]">
@@ -1945,7 +1951,7 @@ function TaskDrawer({
               </div>
             </div>
           </main>
-          <aside className="border-l border-[#e5e9e7] bg-[#fafbfa] p-5">
+          <aside className="min-w-0 overflow-hidden border-t border-[#e5e9e7] bg-[#fafbfa] p-4 sm:p-5 lg:border-l lg:border-t-0">
             <p className="mb-5 text-[11px] font-bold uppercase tracking-wider text-[#8a938f]">
               {tr("Thuộc tính", "Properties")}
             </p>
@@ -2068,7 +2074,7 @@ function TaskDrawer({
                   <Badge
                     key={label.id}
                     variant="outline"
-                    className="group gap-1.5"
+                    className="group h-auto max-w-full min-w-0 shrink whitespace-normal py-1.5 leading-4"
                     style={{
                       color: label.color,
                       borderColor: `${label.color}45`,
@@ -2079,7 +2085,9 @@ function TaskDrawer({
                       className="size-2 rounded-full"
                       style={{ backgroundColor: label.color }}
                     />
-                    {label.name}
+                    <span className="min-w-0 break-words [overflow-wrap:anywhere]">
+                      {label.name}
+                    </span>
                     {isManager && (
                       <>
                         <button
@@ -2323,6 +2331,7 @@ function TaskDrawer({
                   />
                   <Badge
                     variant="outline"
+                    className="h-auto max-w-full min-w-0 shrink whitespace-normal py-1.5 leading-4"
                     style={{
                       color: editingLabel.color,
                       borderColor: `${editingLabel.color}45`,
@@ -2333,7 +2342,9 @@ function TaskDrawer({
                       className="size-2 rounded-full"
                       style={{ backgroundColor: editingLabel.color }}
                     />
-                    {editingLabel.name}
+                    <span className="min-w-0 break-words [overflow-wrap:anywhere]">
+                      {editingLabel.name}
+                    </span>
                   </Badge>
                 </div>
               </label>
@@ -2432,11 +2443,11 @@ function Comments({
             (item) => item.id === comment.user_id,
           );
           return (
-            <div key={comment.id} className="flex gap-3">
+            <div key={comment.id} className="flex min-w-0 gap-3">
               <Avatar name={member?.full_name ?? "?"} />
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <b className="text-sm">
+                <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                  <b className="min-w-0 break-words text-sm [overflow-wrap:anywhere]">
                     {member?.full_name ?? tr("Thành viên", "Member")}
                   </b>
                   <span className="text-[11px] text-[#929a96]">
@@ -2446,14 +2457,14 @@ function Comments({
                     <button
                       type="button"
                       onClick={() => onDelete(comment)}
-                      className="ml-auto rounded p-1 text-[#9aa29e] hover:bg-[#ffebe8] hover:text-[#c54141]"
+                      className="ml-auto shrink-0 rounded p-1 text-[#9aa29e] hover:bg-[#ffebe8] hover:text-[#c54141]"
                       aria-label={tr("Xóa bình luận", "Delete comment")}
                     >
                       <Trash2 size={13} />
                     </button>
                   )}
                 </div>
-                <p className="mt-1 rounded-lg bg-[#f5f7f6] p-3 text-sm leading-6 text-[#52605a]">
+                <p className="mt-1 max-w-full whitespace-pre-wrap break-words rounded-lg bg-[#f5f7f6] p-3 text-sm leading-6 text-[#52605a] [overflow-wrap:anywhere]">
                   {comment.content}
                 </p>
               </div>
@@ -2466,9 +2477,9 @@ function Comments({
           </p>
         )}
       </div>
-      <form onSubmit={onSubmit} className="mt-5 flex items-start gap-3">
+      <form onSubmit={onSubmit} className="mt-5 flex min-w-0 items-start gap-3">
         <Avatar name={data.profile.full_name} />
-        <div className="relative flex-1">
+        <div className="relative min-w-0 flex-1">
           <textarea
             name="comment"
             rows={3}
@@ -2476,7 +2487,7 @@ function Comments({
               "Viết bình luận… Dùng @ để nhắc thành viên",
               "Write a comment… Use @ to mention a teammate",
             )}
-            className="w-full rounded-lg border border-[#dce2df] p-3 pr-12 text-sm outline-none focus:border-[#130b5c]"
+            className="w-full max-w-full resize-y rounded-lg border border-[#dce2df] p-3 pr-12 text-sm outline-none [overflow-wrap:anywhere] focus:border-[#130b5c]"
           />
           <Button
             type="submit"
@@ -2508,9 +2519,9 @@ function Activity({
       {logs.map((log) => {
         const member = data.members.find((item) => item.id === log.user_id);
         return (
-          <div key={log.id} className="flex gap-3">
-            <span className="mt-1 h-2 w-2 rounded-full bg-[#77b9a1]" />
-            <p className="text-xs leading-5 text-[#66716c]">
+          <div key={log.id} className="flex min-w-0 gap-3">
+            <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-[#77b9a1]" />
+            <p className="min-w-0 break-words text-xs leading-5 text-[#66716c] [overflow-wrap:anywhere]">
               <b>{member?.full_name ?? "Hệ thống"}</b>{" "}
               {labels[log.action] ?? log.action}
               <br />
@@ -2539,7 +2550,7 @@ function Property({
   children: React.ReactNode;
 }) {
   return (
-    <div className="mb-4">
+    <div className="mb-4 min-w-0">
       <div className="mb-1.5 flex items-center gap-2 text-[11px] font-semibold text-[#7d8782]">
         <Icon size={13} />
         {label}

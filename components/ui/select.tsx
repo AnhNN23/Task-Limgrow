@@ -17,7 +17,7 @@ function SelectTrigger({
   return (
     <SelectPrimitive.Trigger
       className={cn(
-        "flex h-9 w-full items-center justify-between gap-2 rounded-md border border-[#dfe1e6] bg-white px-3 text-sm text-[#24302b] shadow-sm outline-none transition hover:border-[#b7bdc8] focus:border-[#4c43b5] focus:ring-2 focus:ring-[#4c43b5]/15 disabled:cursor-not-allowed disabled:bg-[#f1f2f4] disabled:opacity-60 data-[placeholder]:text-[#8993a4] [&_svg]:size-4 [&_svg]:shrink-0",
+        "flex h-9 w-full min-w-0 items-center justify-between gap-2 overflow-hidden rounded-md border border-[#dfe1e6] bg-white px-3 text-sm text-[#24302b] shadow-sm outline-none transition hover:border-[#b7bdc8] focus:border-[#4c43b5] focus:ring-2 focus:ring-[#4c43b5]/15 disabled:cursor-not-allowed disabled:bg-[#f1f2f4] disabled:opacity-60 data-[placeholder]:text-[#8993a4] [&>span:first-child]:min-w-0 [&>span:first-child]:truncate [&_svg]:size-4 [&_svg]:shrink-0",
         className,
       )}
       {...props}
@@ -41,7 +41,7 @@ function SelectContent({
       <SelectPrimitive.Content
         position={position}
         className={cn(
-          "z-[150] max-h-[min(320px,var(--radix-select-content-available-height))] min-w-[var(--radix-select-trigger-width)] overflow-hidden rounded-md border border-[#dfe1e6] bg-white text-[#24302b] shadow-[0_8px_24px_rgba(9,30,66,.18)] data-[state=open]:animate-in",
+          "z-[150] max-h-[min(320px,var(--radix-select-content-available-height))] min-w-[var(--radix-select-trigger-width)] max-w-[min(28rem,calc(100vw-2rem))] overflow-hidden rounded-md border border-[#dfe1e6] bg-white text-[#24302b] shadow-[0_8px_24px_rgba(9,30,66,.18)] data-[state=open]:animate-in",
           className,
         )}
         {...props}
@@ -68,7 +68,7 @@ function SelectItem({
   return (
     <SelectPrimitive.Item
       className={cn(
-        "relative flex min-h-9 cursor-default select-none items-center rounded-md py-2 pl-8 pr-3 text-sm outline-none transition focus:bg-[#eeeefe] focus:text-[#130b5c] data-[disabled]:pointer-events-none data-[disabled]:opacity-45",
+        "relative flex min-h-9 min-w-0 max-w-full cursor-default select-none items-center overflow-hidden rounded-md py-2 pl-8 pr-3 text-sm outline-none transition focus:bg-[#eeeefe] focus:text-[#130b5c] data-[disabled]:pointer-events-none data-[disabled]:opacity-45 [&>span:last-child]:min-w-0 [&>span:last-child]:truncate",
         className,
       )}
       {...props}
