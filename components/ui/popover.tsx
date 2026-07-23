@@ -5,6 +5,7 @@ import * as PopoverPrimitive from "@radix-ui/react-popover";
 import { cn } from "@/lib/utils";
 
 const Popover = PopoverPrimitive.Root;
+const PopoverAnchor = PopoverPrimitive.Anchor;
 const PopoverTrigger = PopoverPrimitive.Trigger;
 
 function PopoverContent({
@@ -28,4 +29,4 @@ function PopoverContent({
   );
 }
 
-export { Popover, PopoverContent, PopoverTrigger };
+export { Popover, PopoverAnchor, PopoverContent, PopoverTrigger };

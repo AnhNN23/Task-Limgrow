@@ -74,8 +74,8 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { DatePicker } from "@/components/ui/date-picker";
 import {
   Popover,
+  PopoverAnchor,
   PopoverContent,
-  PopoverTrigger,
 } from "@/components/ui/popover";
 import { SelectField } from "@/components/ui/select";
 import {
@@ -1911,41 +1911,40 @@ function ProjectSearchField({
       }}
     >
       <input type="hidden" name={name} value={value} />
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          role="combobox"
-          aria-expanded={open}
-          aria-controls={listboxId}
-          aria-haspopup="listbox"
-          aria-label={tr("Chọn dự án", "Select project")}
-          className={cn(
-            "flex h-9 w-full items-center justify-between gap-2 rounded-md border border-[#dfe1e6] bg-white px-3 text-left text-sm font-normal text-[#24302b] shadow-sm outline-none transition hover:border-[#b7bdc8] focus:border-[#4c43b5] focus:ring-2 focus:ring-[#4c43b5]/15",
-            !selectedProject && "text-[#8993a4]",
-            className,
-          )}
-        >
-          <span className="truncate">
-            {selectedProject?.name ?? tr("Chọn dự án", "Select project")}
-          </span>
-          <ChevronDown className="size-4 shrink-0 text-[#6b778c]" />
-        </button>
-      </PopoverTrigger>
+      <PopoverAnchor asChild>
+        <div className={cn("relative", className)}>
+          <Search className="pointer-events-none absolute left-3 top-1/2 z-10 size-4 -translate-y-1/2 text-[#8993a4]" />
+          <Input
+            value={open ? query : (selectedProject?.name ?? "")}
+            onFocus={() => {
+              setQuery("");
+              setOpen(true);
+            }}
+            onClick={() => setOpen(true)}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setOpen(true);
+            }}
+            placeholder={tr(
+              "Chọn hoặc tìm dự án…",
+              "Select or search projects…",
+            )}
+            autoComplete="off"
+            role="combobox"
+            aria-expanded={open}
+            aria-controls={listboxId}
+            aria-haspopup="listbox"
+            aria-label={tr("Chọn hoặc tìm dự án", "Select or search projects")}
+            className="px-9 font-normal"
+          />
+          <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-[#6b778c]" />
+        </div>
+      </PopoverAnchor>
       <PopoverContent
         align="start"
-        className="w-[var(--radix-popover-trigger-width)] p-1"
+        onOpenAutoFocus={(event) => event.preventDefault()}
+        className="w-[var(--radix-popper-anchor-width)] p-1"
       >
-        <div className="relative border-b border-[#edf0ee] p-2">
-          <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-[#8993a4]" />
-          <Input
-            autoFocus
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder={tr("Tìm dự án…", "Search projects…")}
-            aria-label={tr("Tìm dự án", "Search projects")}
-            className="pl-9"
-          />
-        </div>
         <div
           id={listboxId}
           role="listbox"
