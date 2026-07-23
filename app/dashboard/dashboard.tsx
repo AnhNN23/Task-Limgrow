@@ -3,6 +3,7 @@
 import {
   useCallback,
   useEffect,
+  useId,
   useMemo,
   useState,
   type FormEvent,
@@ -71,6 +72,11 @@ import { AdminReports } from "./admin-reports";
 import { ActivityTracking } from "./activity-tracking";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { DatePicker } from "@/components/ui/date-picker";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { SelectField } from "@/components/ui/select";
 import {
   Table,
@@ -1715,6 +1721,7 @@ function TaskDialog({
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
   const { tr } = useI18n();
+  const [projectId, setProjectId] = useState("");
   return (
     <DialogShell
       title={tr("Thêm công việc", "Create task")}
@@ -1755,15 +1762,12 @@ function TaskDialog({
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="text-sm font-semibold">
             {tr("Dự án", "Project")}
-            <SelectField
+            <ProjectSearchField
               name="project_id"
-              required
-              placeholder={tr("Chọn dự án", "Select project")}
+              value={projectId}
+              onValueChange={setProjectId}
+              projects={data.projects}
               className="mt-2"
-              options={data.projects.map((project) => ({
-                value: project.id,
-                label: project.name,
-              }))}
             />
           </label>
           <label className="text-sm font-semibold">
@@ -1853,7 +1857,10 @@ function TaskDialog({
           <Button type="button" variant="outline" onClick={onClose}>
             {tr("Hủy", "Cancel")}
           </Button>
-          <Button type="submit" disabled={busy || !data.projects.length}>
+          <Button
+            type="submit"
+            disabled={busy || !data.projects.length || !projectId}
+          >
             {busy
               ? tr("Đang tạo…", "Creating…")
               : tr("Tạo công việc", "Create task")}
@@ -1871,6 +1878,120 @@ function TaskDialog({
     </DialogShell>
   );
 }
+
+function ProjectSearchField({
+  name,
+  value,
+  onValueChange,
+  projects,
+  className,
+}: {
+  name: string;
+  value: string;
+  onValueChange: (value: string) => void;
+  projects: Project[];
+  className?: string;
+}) {
+  const { tr } = useI18n();
+  const listboxId = useId();
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const selectedProject = projects.find((project) => project.id === value);
+  const normalizedQuery = normalizeSearch(query);
+  const filteredProjects = projects.filter((project) =>
+    normalizeSearch(project.name).includes(normalizedQuery),
+  );
+
+  return (
+    <Popover
+      open={open}
+      onOpenChange={(nextOpen) => {
+        setOpen(nextOpen);
+        if (!nextOpen) setQuery("");
+      }}
+    >
+      <input type="hidden" name={name} value={value} />
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          role="combobox"
+          aria-expanded={open}
+          aria-controls={listboxId}
+          aria-haspopup="listbox"
+          aria-label={tr("Chọn dự án", "Select project")}
+          className={cn(
+            "flex h-9 w-full items-center justify-between gap-2 rounded-md border border-[#dfe1e6] bg-white px-3 text-left text-sm font-normal text-[#24302b] shadow-sm outline-none transition hover:border-[#b7bdc8] focus:border-[#4c43b5] focus:ring-2 focus:ring-[#4c43b5]/15",
+            !selectedProject && "text-[#8993a4]",
+            className,
+          )}
+        >
+          <span className="truncate">
+            {selectedProject?.name ?? tr("Chọn dự án", "Select project")}
+          </span>
+          <ChevronDown className="size-4 shrink-0 text-[#6b778c]" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        className="w-[var(--radix-popover-trigger-width)] p-1"
+      >
+        <div className="relative border-b border-[#edf0ee] p-2">
+          <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-[#8993a4]" />
+          <Input
+            autoFocus
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder={tr("Tìm dự án…", "Search projects…")}
+            aria-label={tr("Tìm dự án", "Search projects")}
+            className="pl-9"
+          />
+        </div>
+        <div
+          id={listboxId}
+          role="listbox"
+          className="max-h-64 overflow-y-auto p-1"
+        >
+          {filteredProjects.map((project) => (
+            <button
+              key={project.id}
+              type="button"
+              role="option"
+              aria-selected={project.id === value}
+              onClick={() => {
+                onValueChange(project.id);
+                setOpen(false);
+                setQuery("");
+              }}
+              className="flex min-h-9 w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm font-normal hover:bg-[#eeeefe] focus:bg-[#eeeefe] focus:outline-none"
+            >
+              <span
+                className="size-2.5 shrink-0 rounded-full"
+                style={{ backgroundColor: project.color }}
+              />
+              <span className="min-w-0 flex-1 truncate">{project.name}</span>
+              {project.id === value && (
+                <Check className="size-4 shrink-0 text-[#130b5c]" />
+              )}
+            </button>
+          ))}
+          {!filteredProjects.length && (
+            <p className="px-3 py-6 text-center text-xs font-normal text-[#8993a4]">
+              {tr("Không tìm thấy dự án", "No projects found")}
+            </p>
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function normalizeSearch(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLocaleLowerCase();
+}
+
 function EmployeeDialog({
   onClose,
   onCreated,
